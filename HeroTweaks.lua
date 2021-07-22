@@ -399,23 +399,19 @@ CareerAbilityWHZealot.update = function (self, unit, input, dt, context, t)
 			local is_server = self._is_server
 			local owner_unit = self._owner_unit
 			local buff_extension = self._buff_extension
-			local buff_names = {
-				"zealot_flaggelate"
-			}
-			for i = 1, #buff_names, 1 do
-				local buff_name = buff_names[i]
-				local unit_object_id = network_manager:unit_game_object_id(owner_unit)
-				local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+			
+			local buff_name = "zealot_flaggelate"
+			local unit_object_id = network_manager:unit_game_object_id(owner_unit)
+			local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
 
-				if is_server then
-					buff_extension:add_buff(buff_name, {
-						attacker_unit = owner_unit
-					})
-					network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
-				else
-					network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
-				end
-			end
+			if is_server then
+				buff_extension:add_buff(buff_name, {
+					attacker_unit = owner_unit
+				})
+				network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+			else
+				network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+			end	
 		end
 
 		if input_extension:get("weapon_reload") then
@@ -441,6 +437,23 @@ BuffTemplates.zealot_flaggelate = {
 	}
 --[LEVEL 10 TALENTS]:
 --[UNBENDING PURPOSE]:
+Talents.witch_hunter[5].buffer = "both"
+Talents.witch_hunter[5].buffs = {
+	"victor_zealot_melee_power_on_damage_taken"
+}
+BuffTemplates.victor_zealot_melee_power_on_damage_taken = {
+	buffs = {
+		{
+			name = "victor_zealot_melee_power_on_damage_taken",
+			event_buff = true,
+			event = "on_damage_taken",
+			max_stacks = 1,
+			buff_func = "zealot_melee_power_on_damage_taken",
+			buff_to_add = "victor_zealot_power_buff",
+			perk = "uninterruptible"
+		}
+	}
+}
 BuffTemplates.victor_zealot_power_buff = {
 	buffs = {
 		{
@@ -454,7 +467,7 @@ BuffTemplates.victor_zealot_power_buff = {
 		}
 	}
 }
-ProcFunctions.add_buff_on_enemy_damage_taken_server = function (player, buff, params)
+ProcFunctions.zealot_melee_power_on_damage_taken = function (player, buff, params)
 		local player_unit = player.player_unit
 
 		if Unit.alive(player_unit) then
@@ -462,31 +475,31 @@ ProcFunctions.add_buff_on_enemy_damage_taken_server = function (player, buff, pa
 			local damage_amount = params[2]
 			local damage_type = params[3]
 			local buff_system = Managers.state.entity:system("buff_system")
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
 			local template = buff.template
-			local buff_to_add = template.buff_to_add
-			--local server_controlled = true
+			local buff_name = template.buff_to_add
 			local player_side = Managers.state.side.side_by_unit[player_unit]
 			local attacker_side = Managers.state.side.side_by_unit[attacker_unit]
 			local is_ally = player_side == attacker_side
-
+			local network_manager = Managers.state.network
+			local network_transmit = network_manager.network_transmit
+			local unit_object_id = network_manager:unit_game_object_id(player_unit)
+			local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+			local function is_server()
+				return Managers.player.is_server
+			end
 			if not is_ally and attacker_unit ~= player_unit and damage_amount > 0 and damage_type ~= "overcharge" then
-				local player_unit = player.player_unit
-				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-				local buff_template = buff.template
-				local buff_to_add = buff_template.buff_to_add
-				if buff_extension then
-					buff_extension:add_buff(buff_to_add)
+				if is_server() then
+					buff_extension:add_buff(buff_name, {
+						attacker_unit = player_unit
+					})
+					network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+				else
+					network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
 				end
 			end
 		end
 	end
-BuffTemplates.victor_zealot_power.buffs[1].buff_func = "add_buff_on_enemy_damage_taken_server"
-BuffTemplates.victor_zealot_power.buffs[1].buff_to_add = "victor_zealot_power_buff"
-BuffTemplates.victor_zealot_power.buffs[1].event = "on_damage_taken"
-BuffTemplates.victor_zealot_power.buffs[1].perk = "uninterruptible"
-BuffTemplates.victor_zealot_power.buffs[1].event_buff = true
-BuffTemplates.victor_zealot_power.buffs[1].stat_buff = nil
-BuffTemplates.victor_zealot_power.buffs[1].multiplier = nil
 --[CALLOUSED WITHOUT AND WITHIN]:
 BuffTemplates.victor_zealot_reduced_damage_taken_buff.buffs[1].stat_buff = nil
 BuffTemplates.victor_zealot_reduced_damage_taken_buff.buffs[1].buff_to_add = "victor_zealot_resist_death_on_kill_buff"
@@ -1892,6 +1905,7 @@ PassiveAbilitySettings.bw_1.buffs = {
 		}
 --[UNCHAINED:]
 --[PASSIVES]:
+
 --Not insta explode when launched/disabled
 PlayerCharacterStateOverchargeExploding.on_exit = function (self, unit, input, dt, context, t, next_state)
 	if not Managers.state.network:game() or not next_state then
@@ -1903,10 +1917,6 @@ PlayerCharacterStateOverchargeExploding.on_exit = function (self, unit, input, d
 
 	local career_extension = ScriptUnit.extension(unit, "career_system")
 	local career_name = career_extension:career_name()
-
-	--if not self.has_exploded and (career_name ~= "bw_unchained" or career_extension:get_state() ~= "sienna_activate_unchained") then
-		--self:explode()
-	--end
 
 	if self.falling and next_state ~= "falling" then
 		ScriptUnit.extension(unit, "whereabouts_system"):set_no_landing()
@@ -1961,7 +1971,6 @@ PassiveAbilitySettings.bw_3.buffs = {
 			"sienna_unchained_ability_cooldown_on_hit",
 			"sienna_unchained_ability_cooldown_on_damage_taken"
 		}
-
 --[CHAIN REACTION]:
 ExplosionTemplates.sienna_unchained_burning_enemies_explosion.explosion.damage_profile = "medium_burning_tank"
 ExplosionTemplates.sienna_unchained_burning_enemies_explosion.explosion.effect_name = "fx/wpnfx_flaming_flail_hit_01"
@@ -1974,6 +1983,7 @@ BuffTemplates.sienna_unchained_push_arc_buff.buffs[1].stat_buff = "push_range"
 BuffTemplates.sienna_unchained_push_arc_buff.buffs[1].multiplier = nil
 BuffTemplates.sienna_unchained_push_arc_buff.buffs[1].bonus = 10
 --[NUMB TO PAIN]:
+Talents.bright_wizard[46].buffer = "both"
 Talents.bright_wizard[46].buffs = {
 	"sienna_unchained_reduced_passive_overcharge_armor"
 }
@@ -1982,10 +1992,10 @@ BuffFunctionTemplates.functions.sienna_unchained_apply_overcharge_armor = functi
 
 		if ALIVE[player_unit] then
 			local template = buff.template
-			local buff_to_remove = template.buff_to_remove
+			local buff_to_apply = template.buff_to_apply
 			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
 
-			buff_extension:add_buff(buff_to_remove)
+			buff_extension:add_buff(buff_to_apply)
 		end
 	end
 ProcFunctions.sienna_unchained_nullify_blood_magic_overcharge = function (player, buff, params)
@@ -1995,18 +2005,38 @@ ProcFunctions.sienna_unchained_nullify_blood_magic_overcharge = function (player
 
 		if ALIVE[player_unit] and buff_extension:has_buff_type("sienna_unchained_reduced_passive_overcharge_armor_ready") and damage_type ~= "overcharge" then
 			local template = buff.template
-			local buff_to_remove1 = template.buff_to_remove1
-
-			if buff_extension:has_buff_type(buff_to_remove1) then
-				local has_buff_to_remove1 = buff_extension:get_non_stacking_buff(buff_to_remove1)
-
-				if has_buff_to_remove1 then
-					buff_extension:remove_buff(has_buff_to_remove1.id)
-				end
+			local buff_to_remove = template.buff_to_remove
+			local buff_name = "sienna_unchained_reduced_passive_overcharge_armor_cooldown"
+			local network_manager = Managers.state.network
+			local network_transmit = network_manager.network_transmit
+			local unit_object_id = network_manager:unit_game_object_id(player_unit)
+			local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+			local function is_server()
+				return Managers.player.is_server
 			end
-			buff_extension:add_buff("sienna_unchained_reduced_passive_overcharge_armor_cooldown")
-		else
-			return
+
+			if is_server() then
+						buff_extension:add_buff(buff_name, {
+							attacker_unit = player_unit
+						})
+						network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+						if buff_extension:has_buff_type(buff_to_remove) then
+							local has_buff_to_remove = buff_extension:get_non_stacking_buff(buff_to_remove)
+
+							if has_buff_to_remove then
+								buff_extension:remove_buff(has_buff_to_remove.id)
+							end
+						end
+			else
+						network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+						if buff_extension:has_buff_type(buff_to_remove) then
+							local has_buff_to_remove = buff_extension:get_non_stacking_buff(buff_to_remove)
+
+							if has_buff_to_remove then
+								buff_extension:remove_buff(has_buff_to_remove.id)
+							end
+						end
+			end
 		end
 	end
 BuffTemplates.sienna_unchained_reduced_passive_overcharge_armor = {
@@ -2018,8 +2048,9 @@ BuffTemplates.sienna_unchained_reduced_passive_overcharge_armor = {
 			event_buff = true,
 			buff_func = "sienna_unchained_nullify_blood_magic_overcharge",
 			apply_buff_func = "sienna_unchained_apply_overcharge_armor",
+			buff_to_apply = "sienna_unchained_reduced_passive_overcharge_armor_ready",
 			buff_to_remove = "sienna_unchained_reduced_passive_overcharge_armor_ready",
-			buff_to_remove1 = "sienna_unchained_reduced_passive_overcharge_armor_ready"
+			buff_to_check = "sienna_unchained_reduced_passive_overcharge_armor_cooldown"
 		}
 	}
 }
@@ -2042,20 +2073,12 @@ BuffTemplates.sienna_unchained_reduced_passive_overcharge_armor_cooldown = {
 			buff_after_delay = true,
 			is_cooldown = true,
 			max_stacks = 1,
+			refresh_durations = true,
 			icon = "sienna_unchained_reduced_damage_taken_after_venting",
 			delayed_buff_name = "sienna_unchained_reduced_passive_overcharge_armor_ready"
 		}
 	}
 }
---[[BuffTemplates.sienna_unchained_reduced_damage_taken_after_venting.buffs[1].buff_func = "add_buff"
-BuffTemplates.sienna_unchained_reduced_damage_taken_after_venting.buffs[1].buff_to_add = "sienna_unchained_reduced_passive_overcharge_after_venting_buff"
-BuffTemplates.sienna_unchained_reduced_damage_taken_after_venting.buffs[1].buffs_to_add = nil
-
-BuffTemplates.sienna_unchained_reduced_passive_overcharge_after_venting_buff.buffs[1].multiplier = -0.5
-BuffTemplates.sienna_unchained_reduced_passive_overcharge_after_venting_buff.buffs[1].duration = 2
-BuffTemplates.sienna_unchained_reduced_passive_overcharge_after_venting_buff.buffs[1].icon = "sienna_unchained_reduced_damage_taken_after_venting"
-BuffTemplates.sienna_unchained_reduced_passive_overcharge_after_venting_buff.buffs[1].max_stacks = 1
-BuffTemplates.sienna_unchained_reduced_passive_overcharge_after_venting_buff.buffs[1].refresh_durations = false]]
 --[NATURAL TALENT]:
 BuffTemplates.sienna_unchained_reduced_overcharge.buffs[1].multiplier = -0.3
 BuffTemplates.sienna_unchained_reduced_overcharge.buffs[1].stat_buff = "reduced_overcharge"
@@ -2081,28 +2104,6 @@ CareerAbilityBWUnchained._run_ability = function (self, new_initial_speed)
 
 	if (is_server and bot_player) or local_player then
 		local overcharge_extension = ScriptUnit.extension(owner_unit, "overcharge_system")
-		--[[if talent_extension:has_talent("sienna_unchained_activated_ability_power_on_enemies_hit", "bright_wizard", true) then
-			if not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
-				overcharge_extension:reset()
-				overcharge_extension:add_charge(35)
-				career_extension:set_state("sienna_activate_unchained")
-			elseif buff_extension:has_buff_type("traits_ranged_reduced_overcharge") and not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) then
-				overcharge_extension:reset()
-				overcharge_extension:add_charge(44)
-				career_extension:set_state("sienna_activate_unchained")
-			elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
-				overcharge_extension:reset()
-				overcharge_extension:add_charge(50)
-				career_extension:set_state("sienna_activate_unchained")
-			elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
-				overcharge_extension:reset()
-				overcharge_extension:add_charge(70)
-				career_extension:set_state("sienna_activate_unchained")
-			end
-		else
-			overcharge_extension:reset()
-			career_extension:set_state("sienna_activate_unchained")
-		end	]]
 		overcharge_extension:reset()
 		career_extension:set_state("sienna_activate_unchained")
 	end
@@ -2157,7 +2158,7 @@ CareerAbilityBWUnchained._run_ability = function (self, new_initial_speed)
 	DamageUtils.create_explosion(self._world, owner_unit, position, rotation, explosion_template, scale, damage_source, is_server, is_husk, owner_unit, career_power_level, false, owner_unit)
 	career_extension:start_activated_ability_cooldown()
 
-	if talent_extension:has_talent("sienna_unchained_activated_ability_temp_health") then
+	if talent_extension:has_talent("sienna_unchained_activated_ability_fire_aura") then
 		local buffs = {
 			"sienna_unchained_activated_ability_pulse"
 		}
@@ -2279,7 +2280,6 @@ BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit.buffs[1].b
 	}
 		
 ProcFunctions.sienna_unchained_activated_ability_power_on_enemies_hit = function (player, buff, params)
-		--if Managers.state.network.is_server then
 			local player_unit = player.player_unit
 			local overcharge_extension = ScriptUnit.extension(player_unit, "overcharge_system")
 			local talent_extension = ScriptUnit.extension(player_unit, "talent_system")
@@ -2295,19 +2295,15 @@ ProcFunctions.sienna_unchained_activated_ability_power_on_enemies_hit = function
 						if not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
 							overcharge_extension:reset()
 							overcharge_extension:add_charge(35)
-							--career_extension:set_state("sienna_activate_unchained")
 						elseif buff_extension:has_buff_type("traits_ranged_reduced_overcharge") and not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) then
 							overcharge_extension:reset()
 							overcharge_extension:add_charge(44)
-							--career_extension:set_state("sienna_activate_unchained")
 						elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
 							overcharge_extension:reset()
 							overcharge_extension:add_charge(50)
-							--career_extension:set_state("sienna_activate_unchained")
 						elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
 							overcharge_extension:reset()
 							overcharge_extension:add_charge(70)
-							--career_extension:set_state("sienna_activate_unchained")
 						end
 					end
 
@@ -2334,15 +2330,83 @@ ProcFunctions.sienna_unchained_activated_ability_power_on_enemies_hit = function
 --[BLAZING CRESCENDO]:
 Talents.bright_wizard[50].icon = "sienna_unchained_max_overcharge"
 Talents.bright_wizard[51].icon = "sienna_unchained_activated_ability_radius"
+BuffFunctionTemplates.functions.sienna_unchained_activated_ability_pulse_update = function (unit, buff, params)
+		local template = buff.template
+		local t = params.t
+		local position = POSITION_LOOKUP[unit]
+		local pulse_frequency = template.pulse_frequency
+		local buff_extension = ScriptUnit.extension(unit, "buff_system")
+
+		if not buff_extension then
+			return
+		end
+
+		if not buff.targeting_effect_id then
+			local world = Managers.world:world("level_world")
+			local first_person_effect_name = "fx/unchained_aura_talent_1p"
+			local third_person_effect_name = "fx/unchained_aura_talent_3p"
+			buff.targeting_effect_id = World.create_particles(world, third_person_effect_name, Vector3.zero())
+			buff.targeting_variable_id = World.find_particles_variable(world, third_person_effect_name, "charge_radius")
+
+			World.set_particles_variable(world, buff.targeting_effect_id, buff.targeting_variable_id, Vector3(12, 12, 0.2))
+
+			local screenspace_effect_name = first_person_effect_name
+			local first_person_extension = ScriptUnit.has_extension(unit, "first_person_system")
+
+			if first_person_extension then
+				buff.screenspace_effect_id = first_person_extension:create_screen_particles(screenspace_effect_name)
+			end
+		end
+
+		if buff.targeting_effect_id then
+			local world = Managers.world:world("level_world")
+
+			World.move_particles(world, buff.targeting_effect_id, position)
+		end
+
+		if not buff.timer or buff.timer < t then
+			if not Managers.state.network.is_server then
+				return
+			end
+
+			local ai_system = Managers.state.entity:system("ai_system")
+			local ai_broadphase = ai_system.broadphase
+			local buff_extension = ScriptUnit.extension(unit, "buff_system")
+			local buff_system = Managers.state.entity:system("buff_system")
+			local range = 10
+			local broadphase_results = {}
+			table.clear(broadphase_results)
+
+			local num_nearby_enemies = Broadphase.query(ai_broadphase, position, range, broadphase_results)
+			local num_alive_nearby_enemies = 0
+
+			for i = 1, num_nearby_enemies, 1 do
+				local enemy_unit = broadphase_results[i]
+
+				if AiUtils.unit_alive(enemy_unit) then
+					local damage = 2
+					local buff_system = Managers.state.entity:system("buff_system")
+
+					buff_system:add_buff(enemy_unit, "burning_1W_dot_unchained_pulse", unit, false, 200, unit)
+					DamageUtils.add_damage_network(enemy_unit, enemy_unit, damage, "torso", "burn_shotgun", nil, Vector3(0, 0, 0), nil, nil, unit)
+				end
+			end
+
+			buff.timer = t + pulse_frequency
+		end
+	end
+BuffTemplates.burning_1W_dot_unchained_pulse.buffs[1].duration = 8
+BuffTemplates.burning_1W_dot_unchained_pulse.buffs[1].time_between_dot_damages = 2
 --"sienna_unchained_activated_ability_damage"
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.radius = 10
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.max_damage_radius = 6.5
-ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.no_friendly_Fire = nil
+ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.no_friendly_fire = nil
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.attack_template = "flame_blast"
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.alert_enemies_radius = 20
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.damage_profile = "unchained_ability_blazing_crescendo"
+ExplosionTemplates.explosion_bw_unchained_ability.explosion.no_friendly_fire = true
 
-ExplosionTemplates.explosion_bw_unchained_ability.explosion.no_friendly_Fire = true
+
 -------------------------------------------------------
 --					//////[KERILLIAN]\\\\\\
 -------------------------------------------------------
@@ -2455,30 +2519,12 @@ HTDamageProfileTemplates.unchained_ability_blazing_crescendo = {
 	charge_value = "grenade",
 	is_explosion = true,
 	no_stagger_damage_reduction_ranged = true,
-	--[[armor_modifier = {
-		attack = {
-			0.6,
-			0.4,
-			1.25,
-			1,
-			1,
-			1
-		},
-		impact = {
-			1,
-			0.5,
-			100,
-			1,
-			1,
-			1
-		}
-	},]]
 	armor_modifier = {
 		attack = {
 			1,
 			0.4,
 			3,
-			1,
+			0.5,
 			1.5,
 			0.25
 		},
@@ -2491,14 +2537,6 @@ HTDamageProfileTemplates.unchained_ability_blazing_crescendo = {
 			1
 		}
 	},
-	--[[default_target = {
-		damage_type = "grenade",
-		attack_template = "drakegun",
-		power_distribution = {
-			attack = 0.75,
-			impact = 2
-		}
-	}]]
 	default_target = {
 		attack_template = "flame_blast",
 		dot_template_name = "burning_1W_dot",
