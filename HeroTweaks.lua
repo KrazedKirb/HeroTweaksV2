@@ -2,7 +2,58 @@ local mod = get_mod("HeroTweaks")
 -------------------------------------------------------
 --					//////[GENERAL]\\\\\\
 -------------------------------------------------------
+--[NETWORK LOOKUP]
+--[PING SYSTEM]:
 --[HEAL SHARE]:
+local PlayerUnitStatusSettings = PlayerUnitStatusSettings
+PlayerUnitStatusSettings.CONQUEROR_DEGEN_DELAY = math.huge
+PlayerUnitStatusSettings.CONQUEROR_DEGEN_AMOUNT = 0
+PlayerUnitStatusSettings.CONQUEROR_DEGEN_START = math.huge
+function PlayerUnitHealthExtension:health_degen_settings()
+    local buff_extension = self.buff_extension
+    local degen_amount = PlayerUnitStatusSettings.NOT_WOUNDED_DEGEN_AMOUNT
+    local degen_delay = PlayerUnitStatusSettings.NOT_WOUNDED_DEGEN_DELAY
+    local degen_start = PlayerUnitStatusSettings.NOT_WOUNDED_DEGEN_START
+
+    if buff_extension then
+        if buff_extension:has_buff_perk("conqueror_healing") then
+            degen_amount = PlayerUnitStatusSettings.CONQUEROR_DEGEN_AMOUNT
+            degen_delay = PlayerUnitStatusSettings.CONQUEROR_DEGEN_DELAY
+            degen_start = PlayerUnitStatusSettings.CONQUEROR_DEGEN_START
+        elseif buff_extension:has_buff_perk("smiter_healing") then
+            degen_amount = PlayerUnitStatusSettings.SMITER_DEGEN_AMOUNT
+            degen_delay = PlayerUnitStatusSettings.SMITER_DEGEN_DELAY
+            degen_start = PlayerUnitStatusSettings.SMITER_DEGEN_START
+        elseif buff_extension:has_buff_perk("linesman_healing") then
+            degen_amount = PlayerUnitStatusSettings.LINESMAN_DEGEN_AMOUNT
+            degen_delay = PlayerUnitStatusSettings.LINESMAN_DEGEN_DELAY
+            degen_start = PlayerUnitStatusSettings.LINESMAN_DEGEN_START
+        elseif buff_extension:has_buff_perk("tank_healing") then
+            degen_amount = PlayerUnitStatusSettings.TANK_DEGEN_AMOUNT
+            degen_delay = PlayerUnitStatusSettings.TANK_DEGEN_DELAY
+            degen_start = PlayerUnitStatusSettings.TANK_DEGEN_START
+        elseif buff_extension:has_buff_perk("ninja_healing") then
+            degen_amount = PlayerUnitStatusSettings.NINJA_DEGEN_AMOUNT
+            degen_delay = PlayerUnitStatusSettings.NINJA_DEGEN_DELAY
+            degen_start = PlayerUnitStatusSettings.NINJA_DEGEN_START
+        end
+    end
+
+    if Managers.weave:get_active_wind() == "death" then
+        degen_amount = degen_amount * 2
+        degen_delay = degen_delay
+        degen_start = 0
+    end
+
+    return degen_amount, degen_delay, degen_start
+end
+
+for buff_name, buff_settings in pairs(BuffTemplates) do
+    if string.find(buff_name, "_conqueror$") then
+        buff_settings.buffs[1].perk = "conqueror_healing"
+    end
+end
+--[ACTION TEMPLATES]:
 -------------------------------------------------------
 --					//////[KRUBER]\\\\\\
 -------------------------------------------------------
@@ -29,7 +80,7 @@ ActionUtils.get_dropoff_scalar = function (damage_profile, target_settings, atta
 		dropoff_end = dropoff_end * 2
 	end
 
-	if distance < dropoff_start and buff_extension:has_buff_type("markus_huntsman_movement_speed") then
+	if distance < 10 and buff_extension:has_buff_type("markus_huntsman_movement_speed") then
 		DamageProfileTemplates.arrow_carbine.armor_modifier_near.attack = {
 			1,
 			0.4,
@@ -68,7 +119,8 @@ ActionUtils.get_dropoff_scalar = function (damage_profile, target_settings, atta
 			1,
 			1,
 			0.5,
-			0.25
+			0.4
+			--0.25
 		}
 		DamageProfileTemplates.shot_shotgun.armor_modifier_near.attack = {
 			1,
@@ -76,7 +128,8 @@ ActionUtils.get_dropoff_scalar = function (damage_profile, target_settings, atta
 			0.4,
 			0.75,
 			1,
-			0.25
+			0.15
+			--0.25
 		}
 	else
 		DamageProfileTemplates.arrow_carbine.armor_modifier_near.attack = {
@@ -294,7 +347,76 @@ BuffTemplates.markus_huntsman_attack_speed_remove = {
 BuffTemplates.markus_huntsman_defence_buff.buffs[1].max_stacks = 4
 BuffTemplates.markus_huntsman_stacking_damage_reduction_on_kills.buffs[1].max_sub_buff_stacks = 4
 --[GRAIL KNIGHT]:
+--Weapons.markus_questingknight_career_skill_weapon.buff_type = "MELEE_ABILITY"
+--[VIRTUE OF THE CONFIDENCE]
+Weapons.markus_questingknight_career_skill_weapon.actions.action_career_release.default_tank.hit_mass_count = HEAVY_LINESMAN_HIT_MASS_COUNT
 --[VIRTUE OF THE IMPETUOUS KNIGHT]
+--[[ActionCareerESQuestingKnight.init = function (self, world, item_name, is_server, owner_unit, damage_unit, first_person_unit, weapon_unit, weapon_system)
+	ActionCareerESQuestingKnight.super.init(self, world, item_name, is_server, owner_unit, damage_unit, first_person_unit, weapon_unit, weapon_system)
+
+	self.career_extension = ScriptUnit.extension(owner_unit, "career_system")
+	self.inventory_extension = ScriptUnit.extension(owner_unit, "inventory_system")
+	self.talent_extension = ScriptUnit.extension(owner_unit, "talent_system")
+	self.status_extension = ScriptUnit.extension(owner_unit, "status_system")
+	self._player = player
+	self._is_server = player.is_server
+	self._owner_unit = unit
+end
+ActionCareerESQuestingKnight.finish = function (self, reason, data)
+	ActionCareerESQuestingKnight.super.finish(self, reason, data)
+	self.inventory_extension:stop_weapon_fx("career_action", true)
+	local is_server = self._is_server
+	local owner_unit = self._owner_unit
+	local talent_extension = self.talent_extension
+	local network_manager = self._network_manager
+	local network_transmit = network_manager.network_transmit
+	local unit_object_id = network_manager:unit_game_object_id(owner_unit)
+	local buffs = {
+		"markus_questing_knight_ability_buff_on_kill_movement_speed",
+		"markus_questing_knight_ability_buff_on_kill_attack_speed"
+	}
+
+	local new_action_settings = data and data.new_action_settings
+	local is_ability_cancel = new_action_settings and new_action_settings.is_ability_cancel
+
+	if is_ability_cancel or not self._combo_no_wield or reason ~= "new_interupting_action" then
+		self.status_extension:set_stagger_immune(false)
+
+		local career_extension = self.career_extension
+
+		if not self._cooldown_started then
+			self._cooldown_started = true
+
+			career_extension:start_activated_ability_cooldown()
+			if talent_extension:has_talent("markus_questing_knight_ability_buff_on_kill") then
+				if is_server then
+					local buff_extension = self._buff_extension
+
+					for i = 1, #buffs, 1 do
+						local buff_name = buffs[i]
+						local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+
+						buff_extension:add_buff(buff_name, {
+							attacker_unit = owner_unit
+						})
+						network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+					end
+				else
+					for i = 1, #buffs, 1 do
+						local buff_name = buffs[i]
+						local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+
+						network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+					end
+				end
+			end
+		end
+
+		self.inventory_extension:wield_previous_non_level_slot()
+	end
+end]]
+Talents.empire_soldier[73].buffer = "both"
+
 BuffTemplates.markus_questing_knight_ability_buff_on_kill_movement_speed.buffs[1].perk = "no_ranged_knockback"
 BuffTemplates.markus_questing_knight_ability_buff_on_kill_attack_speed = {
 	buffs = {
@@ -302,31 +424,74 @@ BuffTemplates.markus_questing_knight_ability_buff_on_kill_attack_speed = {
 			stat_buff = "attack_speed",
 			max_stacks = 1,
 			name = "markus_questing_knight_ability_buff_on_kill_attack_speed",
-			multiplier = 0.10,
-			duration = 15
+			multiplier = 0.15,
+			duration = 10
 		}
 	}
 }
+BuffTemplates.markus_questing_knight_ability_buff_on_kill_movement_speed.buffs[1].duration = 10
 BuffTemplates.markus_questing_knight_ability_buff_on_kill.buffs[1].buff_to_add_1 = "markus_questing_knight_ability_buff_on_kill_attack_speed"
---BuffTemplates.markus_questing_knight_ability_buff_on_kill.buffs[1].event = "on_hit"
+BuffTemplates.markus_questing_knight_ability_buff_on_kill.buffs[1].event = "on_damage_dealt" --"on_kill" --"on_hit"
+--BuffTemplates.markus_questing_knight_ability_buff_on_kill.buffs[1].event_buff = nil
+--BuffTemplates.markus_questing_knight_ability_buff_on_kill.buffs[1].buff_func = nil
+--BuffTemplates.markus_questing_knight_ability_buff_on_kill.buffs[1].buff_to_add = nil
+
 ProcFunctions.markus_questing_knight_ability_kill_buff_func = function (player, buff, params)
 		local player_unit = player.player_unit
 
 		if Unit.alive(player_unit) then
-			local killing_blow_table = params[1]
-			local killing_blow_damage_source = killing_blow_table[DamageDataIndex.DAMAGE_SOURCE_NAME]
-
-			if killing_blow_table and killing_blow_damage_source == "markus_questingknight_career_skill_weapon" then
+			local buffs = {
+				"markus_questing_knight_ability_buff_on_kill_movement_speed",
+				"markus_questing_knight_ability_buff_on_kill_attack_speed"
+			}
+			--local killing_blow_table = params[1]
+			--local killing_blow_damage_source = killing_blow_table[DamageDataIndex.DAMAGE_SOURCE_NAME]
+			local attacker_unit = params[1]
+			local damage_source = params[9]
+			--[[local target_number = params[4]
+			local buff_type = params[5]
+			if target_number and target_number <= 1 then
+				buff.can_trigger = true
+			end]]
+			
+			--if buff.can_trigger and buff_type == "MELEE_2H"  then
+			if attacker_unit and damage_source == "markus_questingknight_career_skill_weapon" then
+			--if killing_blow_table and killing_blow_damage_source == "markus_questingknight_career_skill_weapon" then
 				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-				local buff_template = buff.template
-				local buff_to_add = buff_template.buff_to_add
-				local buff_to_add_1 = buff_template.buff_to_add_1
+				local network_manager = Managers.state.network
+				local network_transmit = network_manager.network_transmit
+				local unit_object_id = network_manager:unit_game_object_id(player_unit)
+				local function is_server()
+					return Managers.player.is_server
+				end
+				if is_server() then
+				--local buff_template = buff.template
+				--local buff_to_add = buff_template.buff_to_add
+				--local buff_to_add_1 = buff_template.buff_to_add_1
 
-				if buff_extension then
-					buff_extension:add_buff(buff_to_add)
-					buff_extension:add_buff(buff_to_add_1)
+					for i = 1, #buffs, 1 do
+							local buff_name = buffs[i]
+							local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+
+							buff_extension:add_buff(buff_name, {
+								attacker_unit = owner_unit
+							})
+							network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+					end
+				else
+					for i = 1, #buffs, 1 do
+						local buff_name = buffs[i]
+						local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+
+						network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+					end
 				end
 			end
+
+				--[[if buff_extension then
+					buff_extension:add_buff(buff_to_add)
+					buff_extension:add_buff(buff_to_add_1)
+				end]]
 		end
 	end
 -------------------------------------------------------
@@ -335,6 +500,493 @@ ProcFunctions.markus_questing_knight_ability_kill_buff_func = function (player, 
 --[WITCH HUNTER CAPTAIN:]
 --[TEMPLAR'S KNOWLEDGE]:
 BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].max_stacks = 4
+--BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].duration = 15
+--BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].refresh_durations = true
+--[BOUNTY HUNTER]:
+--[temp hp on cleave]
+--[[BuffTemplates.victor_bountyhunter_reaper = {
+	buffs = {
+		{
+			multiplier = -0.05,
+			name = "reaper",
+			event_buff = true,
+			buff_func = "heal_damage_targets_on_melee",
+			event = "on_player_damage_dealt",
+			perk = "linesman_healing",
+			max_targets = 5,
+			bonus = 0.25
+		}
+	}
+}
+Talents.witch_hunter[20].description = "reaper_desc"
+Talents.witch_hunter[20].description_values[1] = {
+	value = BuffTemplates.reaper.buffs[1].max_targets
+}
+Talents.witch_hunter[20].buffs = {
+	"victor_bountyhunter_reaper"
+}]]
+--[steel crescendo]
+Talents.witch_hunter[22].buffs = {
+	"victor_bountyhunter_steel_crescendo"
+}
+ProcFunctions.victor_bountyhunter_steel_crescendo_buff_add = function (player, buff, params)
+	local player_unit = player.player_unit
+	if Unit.alive(player_unit) then
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			local buff_type = params[5]
+			local is_critical = params[6]
+			local network_manager = Managers.state.network
+			local network_transmit = network_manager.network_transmit
+			local unit_object_id = network_manager:unit_game_object_id(player_unit)
+			local function is_server()
+				return Managers.player.is_server
+			end
+			local buffs_to_add = {
+				"victor_bountyhunter_steel_crescendo_buff_power",
+				"victor_bountyhunter_steel_crescendo_buff_attack_speed"
+				--"victor_bountyhunter_steel_crescendo_buff_healing"
+			}
+
+			if is_critical and not MeleeBuffTypes[buff_type] then
+				for i = 1, #buffs_to_add, 1 do
+					local buff_name = buffs_to_add[i]
+					local unit_object_id = network_manager:unit_game_object_id(player_unit)
+					local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+
+					if is_server() then
+						buff_extension:add_buff(buff_name, {
+							attacker_unit = player_unit
+						})
+						network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+					else
+						network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+					end
+				end
+			end
+	end
+end	
+BuffTemplates.victor_bountyhunter_steel_crescendo = {
+	buffs = {
+		{
+			event = "on_hit",
+			event_buff = true,
+			max_stacks = 1,
+			name = "victor_bountyhunter_steel_crescendo",
+			buff_func = "victor_bountyhunter_steel_crescendo_buff_add"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_steel_crescendo_buff_power = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_steel_crescendo_buff_power",
+			stat_buff = "power_level_melee",
+			multiplier = 0.15,
+			icon = "victor_bountyhunter_melee_damage_on_no_ammo",
+			duration = 10,
+			refresh_durations = true,
+			max_stacks = 1
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_steel_crescendo_buff_attack_speed = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_steel_crescendo_buff_attack_speed",
+			stat_buff = "attack_speed",
+			multiplier = 0.15,
+			--icon = "victor_bountyhunter_melee_damage_on_no_ammo",
+			duration = 10,
+			refresh_durations = true,
+			max_stacks = 1
+		}
+	}
+}
+--[weight of fire]
+BuffTemplates.victor_bountyhunter_power_level_on_clip_size_buff.buffs[1].multiplier = 0.0125
+--[blessed combat]
+--[cruel fortune]
+Talents.witch_hunter[26].buffs = {
+	"victor_bountyhunter_guaranteed_melee_crit_handler"
+}
+BuffFunctionTemplates.functions.victor_bountyhunter_apply_guaranteed_melee_crit = function (unit, buff, params)
+	local talent_extension = ScriptUnit.has_extension(unit, "talent_system")
+
+		if ALIVE[unit] and talent_extension:has_talent("victor_bountyhunter_passive_reduced_cooldown") then
+			local template = buff.template
+			local buff_to_apply = template.buff_to_apply
+			local buff_extension = ScriptUnit.extension(unit, "buff_system")
+
+			buff_extension:add_buff(buff_to_apply)
+		end
+	end
+ProcFunctions.victor_bountyhunter_remove_guaranteed_melee_crit = function (player, buff, params)
+	local player_unit = player.player_unit
+	local buff_type = params[5]
+
+	if Unit.alive(player_unit) then
+		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+		local has_buff_to_remove = buff_extension:get_non_stacking_buff("victor_bountyhunter_guaranteed_melee_crit")
+
+		if has_buff_to_remove and MeleeBuffTypes[buff_type] then
+			buff_extension:remove_buff(has_buff_to_remove.id)
+		end
+	end
+end
+BuffTemplates.victor_bountyhunter_passive_crit_buff.buffs[1].apply_buff_func = "victor_bountyhunter_apply_guaranteed_melee_crit"
+BuffTemplates.victor_bountyhunter_passive_crit_buff.buffs[1].buff_to_apply = "victor_bountyhunter_guaranteed_melee_crit"
+BuffTemplates.victor_bountyhunter_guaranteed_melee_crit = {
+	buffs = {
+		{
+			stat_buff = "critical_strike_chance_melee",
+			bonus = 1,
+			icon = "victor_bountyhunter_passive_reduced_cooldown",
+			max_stacks = 1,
+			name = "victor_bountyhunter_guaranteed_melee_crit"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_guaranteed_melee_crit_handler = {
+	buffs = {
+		{
+			event_buff = true,
+			event = "on_hit",
+			buff_func = "victor_bountyhunter_remove_guaranteed_melee_crit",
+			max_stacks = 1,
+			name = "victor_bountyhunter_guaranteed_melee_crit_handler"
+		}
+	}
+}
+--[prized bounty]
+--PRIZED BOUNTY NEW
+Talents.witch_hunter[27].buffs = {
+	"victor_bountyhunter_passive_infinite_ammo",
+	"victor_bountyhunter_refresh_blessed_shot_on_headshot_crit"
+}
+ProcFunctions.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit = function (player, buff, params)
+	local player_unit = player.player_unit
+
+		if ALIVE[player_unit] then
+			local hit_zone = params[3]
+			local target_number = params[4]
+			local buff_type = params[5]
+			local is_critical = params[6]
+
+			if target_number and target_number <= 1 then
+				buff.can_trigger = true
+			end
+
+			if buff.can_trigger and buff_type == "RANGED" and (hit_zone == "head" or hit_zone == "neck") and is_critical then
+				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+				local buff_to_add = buff.template.buff_to_add
+
+				buff_extension:add_buff(buff_to_add)
+
+				buff.can_trigger = false
+			elseif buff.can_trigger and buff_type == "RANGED_ABILITY" and (hit_zone == "head" or hit_zone == "neck") and is_critical then
+				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+				local buff_to_add_1 = buff.template.buff_to_add_1
+
+				buff_extension:add_buff(buff_to_add_1)
+
+				buff.can_trigger = false
+			end
+		end
+end
+BuffFunctionTemplates.functions.add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed = function (unit, buff, params)
+	local player_unit = unit
+	if Unit.alive(player_unit) then
+		local template = buff.template
+		local procced = math.random() <= template.proc_chance
+		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+		local has_cooldown = buff_extension:get_non_stacking_buff("victor_bountyhunter_refresh_blessed_shot_cooldown")
+		if procced then
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			buff_extension:add_buff("victor_bountyhunter_refresh_blessed_shot_timer")
+		end
+	end
+end
+BuffFunctionTemplates.functions.add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed_guaranteed = function (unit, buff, params)
+	local player_unit = unit
+	if Unit.alive(player_unit) then
+		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+		buff_extension:add_buff("victor_bountyhunter_refresh_blessed_shot_timer")
+	end
+end
+BuffFunctionTemplates.functions.victor_bountyhunter_remove_passive_cooldown_on_remove = function (unit, buff, params)
+	local player_unit = unit
+	if Unit.alive(player_unit) then
+		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+		local has_buff1 = buff_extension:get_non_stacking_buff("victor_bountyhunter_passive_crit_cooldown")  
+		local has_buff2 = buff_extension:get_non_stacking_buff("victor_bountyhunter_passive_reduced_cooldown")
+		if has_buff1 then
+			buff_extension:remove_buff(has_buff1.id)
+		end
+		if has_buff2 then
+			buff_extension:remove_buff(has_buff2.id)
+		end
+	end
+end
+BuffTemplates.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit",
+			max_stacks = 1,
+			event = "on_hit",
+			buff_to_add = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff",
+			buff_to_add_1 = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_guaranteed",
+			event_buff = true,
+			buff_func = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff",
+			max_stacks = 1,
+			duration = 0, --0.1,
+			proc_chance = 0.5,
+			remove_buff_func = "add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_guaranteed = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_guaranteed",
+			max_stacks = 1,
+			duration = 0, --0.1,
+			remove_buff_func = "add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed_guaranteed"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_refresh_blessed_shot_timer = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_refresh_blessed_shot_timer",
+			max_stacks = 1,
+			is_cooldown = true,
+			duration = 0, --0.05,
+			icon = "victor_witchhunter_power_level_unbalance",
+			buff_after_delay = true,
+			delayed_buff_name = "victor_bountyhunter_passive_crit_buff",
+			remove_buff_func = "victor_bountyhunter_remove_passive_cooldown_on_remove"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_refresh_blessed_shot_cooldown = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_refresh_blessed_shot_cooldown",
+			is_cooldown = true,
+			duration = 10,
+			max_stacks = 1,
+			icon = "sienna_scholar_damage_taken_on_elite_or_special_kill"
+		}
+	}
+}
+--[rile the mob]
+ProcFunctions.victor_bountyhunter_rile_the_mob = function (player, buff, params)
+		local player_unit = player.player_unit
+		local function is_server()
+			return Managers.player.is_server
+		end
+
+		if Unit.alive(player_unit) then
+			local buff_type = params[5]
+			local is_critical = params[6]
+
+			if is_critical and not MeleeBuffTypes[buff_type] then
+				local side = Managers.state.side.side_by_unit[player_unit]
+				local player_and_bot_units = side.PLAYER_AND_BOT_UNITS
+				local num_targets = #player_and_bot_units
+				local range = 40
+				local buff_template = buff.template
+				local network_manager = Managers.state.network
+				local network_transmit = network_manager.network_transmit
+				local unit_object_id = network_manager:unit_game_object_id(player_unit)
+				local owner_position = POSITION_LOOKUP[player_unit]
+				local range_squared = range * range
+				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+				local buff_to_add_1 = buff_template.buff_to_add_1
+
+				buff_extension:add_buff(buff_to_add_1)
+
+				for i = 1, num_targets, 1 do
+					local target_unit = player_and_bot_units[i]
+					local ally_position = POSITION_LOOKUP[target_unit]
+					local distance_squared = Vector3.distance_squared(owner_position, ally_position)
+
+					if distance_squared < range_squared then
+						local buff_to_add = buff_template.buff_to_add
+						local target_unit_object_id = network_manager:unit_game_object_id(target_unit)
+						local target_buff_extension = ScriptUnit.extension(target_unit, "buff_system")
+						local buff_template_name_id = NetworkLookup.buff_templates[buff_to_add]
+
+						if is_server() then
+							target_buff_extension:add_buff(buff_to_add)
+							network_transmit:send_rpc_clients("rpc_add_buff", target_unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+						else
+							network_transmit:send_rpc_server("rpc_add_buff", target_unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+						end
+					end
+				end
+			end
+		end
+	end
+BuffTemplates.victor_bountyhunter_party_movespeed_on_ranged_crit.buffs[1].buff_func = "victor_bountyhunter_rile_the_mob"
+BuffTemplates.victor_bountyhunter_party_movespeed_on_ranged_crit.buffs[1].buff_to_add_1 = "victor_bountyhunter_victor_movespeed_on_ranged_crit_buff"
+BuffTemplates.victor_bountyhunter_victor_movespeed_on_ranged_crit_buff = {
+	buffs = {
+		{
+			remove_buff_func = "remove_movement_buff",
+			refresh_durations = true,
+			name = "victor_bountyhunter_victor_movespeed_on_ranged_crit_buff",
+			max_stacks = 1,
+			multiplier = 1.1,
+			duration = 10,
+			apply_buff_func = "apply_movement_buff",
+			path_to_movement_setting_to_modify = {
+				"move_speed"
+			}
+		}
+	}
+}
+--[salvage]
+ProcFunctions.victor_bounty_hunter_ammo_fraction_gain_out_of_ammo = function (player, buff, params)
+		local player_unit = player.player_unit
+
+		if player and player.remote then
+			return
+		end
+
+		if Unit.alive(player_unit) then
+			local killed_unit_breed_data = params[2]
+
+			if killed_unit_breed_data.elite or killed_unit_breed_data.special then
+				local buff_template = buff.template
+				local weapon_slot = "slot_ranged"
+				local inventory_extension = ScriptUnit.extension(player_unit, "inventory_system")
+				local slot_data = inventory_extension:get_slot_data(weapon_slot)
+				local right_unit_1p = slot_data.right_unit_1p
+				local left_unit_1p = slot_data.left_unit_1p
+				local right_hand_ammo_extension = ScriptUnit.has_extension(right_unit_1p, "ammo_system")
+				local left_hand_ammo_extension = ScriptUnit.has_extension(left_unit_1p, "ammo_system")
+				local ammo_extension = right_hand_ammo_extension or left_hand_ammo_extension
+				local current_ammo = ammo_extension:remaining_ammo()
+				local clip_ammo = ammo_extension:ammo_count()
+
+				if current_ammo < 1 and clip_ammo < 1 then
+					local ammo_bonus_fraction = buff_template.ammo_bonus_fraction
+					local ammo_amount = math.max(math.round(ammo_extension:max_ammo() * ammo_bonus_fraction), 1)
+
+					if ammo_extension then
+						ammo_extension:add_ammo_to_reserve(ammo_amount)
+					end
+				end
+			end
+		end
+	end
+--ULT CHANGES
+--just reward buffs
+Talents.witch_hunter[33].buffs = {
+	"victor_bountyhunter_activated_ability_passive_cooldown_reduction",
+	"victor_bountyhunter_activated_ability_penetration",
+	"victor_bountyhunter_activated_ability_additional_penetration_on_penetrate"
+}
+ProcFunctions.victor_bountyhunter_additional_penetration_on_activated_ability_crit = function (player, buff, params)
+	local player_unit = player.player_unit
+	local action_type = params[1]
+	local ranged_ability = action_type == "career_wh_two"
+	if Unit.alive(player_unit) then
+		if ranged_ability then
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			buff_extension:add_buff("victor_bountyhunter_activated_ability_penetration_buff")
+		end
+	end
+end
+ProcFunctions.victor_bountyhunter_add_additional_penetration = function (player, buff, params)
+	local player_unit = player.player_unit
+
+	if Unit.alive(player_unit) then
+			local hit_zone = params[3]
+			local target_number = params[4]
+			local buff_type = params[5]
+
+			if target_number and target_number >= 2 then
+				buff.can_trigger = true
+			end
+
+			if buff.can_trigger and buff_type == "RANGED_ABILITY" then
+				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+
+				buff_extension:add_buff("victor_bountyhunter_activated_ability_additional_penetration_on_penetrate_buff")
+
+				buff.can_trigger = false
+			end
+	end
+end
+BuffTemplates.victor_bountyhunter_activated_ability_penetration = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_activated_ability_penetration",
+			max_stacks = 1,
+			event = "on_critical_action",
+			event_buff = true,
+			buff_func = "victor_bountyhunter_additional_penetration_on_activated_ability_crit"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_activated_ability_penetration_buff = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_activated_ability_penetration_buff",
+			duration = 1,
+			bonus = 1,
+			refresh_durations = true,
+			stat_buff = "ranged_additional_penetrations",
+			max_stacks = 1
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_activated_ability_additional_penetration_on_penetrate = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_activated_ability_additional_penetration_on_penetrate",
+			max_stacks = 1,
+			event_buff = true,
+			event = "on_hit",
+			buff_func = "victor_bountyhunter_add_additional_penetration"
+		}
+	}
+}
+BuffTemplates.victor_bountyhunter_activated_ability_additional_penetration_on_penetrate_buff = {
+	buffs = {
+		{
+			name = "victor_bountyhunter_activated_ability_additional_penetration_on_penetrate_buff",
+			max_stacks = 1,
+			duration = 15,
+			refresh_durations = true,
+			stat_buff = "ranged_additional_penetrations",
+			bonus = 1,
+			icon = "victor_bountyhunter_activated_ability_reset_cooldown_on_stacks"
+		}
+	}
+}
+--[just reward]
+BuffTemplates.victor_bountyhunter_activated_ability_passive_cooldown_reduction.buffs[1].multiplier = 0.25
+--[double shotted]
+--[buckshot]
+BuffTemplates.victor_bountyhunter_activated_ability_blast_shotgun.buffs[1].stat_buff = nil
+BuffTemplates.victor_bountyhunter_activated_ability_blast_shotgun.buffs[1].multiplier = nil
+BuffTemplates.victor_bounty_blast_streak_buff.buffs[1].stat_buff = "cooldown_regen"
+BuffTemplates.victor_bounty_blast_streak_buff.buffs[1].multiplier = 0.15
+BuffTemplates.victor_bounty_blast_streak_buff.buffs[1].icon = "victor_bountyhunter_activated_ability_shotgun"
+--buckshot wep CHANGES
+Weapons.victor_bountyhunter_career_skill_weapon.actions.action_career_release.default.shot_count = 15
+--experimental
+
 --[ZEALOT]:
 
 TalentTrees.witch_hunter[1] = {
@@ -513,7 +1165,7 @@ BuffTemplates.victor_zealot_resist_death_on_kill_buff = {
 			max_stacks = 1,
 			refresh_durations = true,
 			icon = "victor_zealot_reduced_damage_taken",
-			duration = 1.5,
+			duration = 2,
 			perk = "ignore_death"
 		}
 	}
@@ -1053,6 +1705,9 @@ ProcFunctions.buff_on_stagger_enemy = function (player, buff, params)
 		local buff_name = buff_template.buff_to_add
 		local enemy_type_list = buff_template.enemy_type or nil
 		local add_buff = false
+		local function is_server()
+			return Managers.player.is_server
+		end
 
 		if breed and enemy_type_list then
 			for i = 1, #enemy_type_list, 1 do
@@ -1123,12 +1778,30 @@ BuffTemplates.bardin_ironbreaker_party_power_on_blocked_attacks_add_1 = {
 			}
 		}
 	}
+BuffTemplates.bardin_ironbreaker_party_power_on_blocked_attacks_buff.buffs[1].duration = 15
 --[VENGEANCE]:
 Talents.dwarf_ranger[7].description_values[1].value = 4
 BuffTemplates.bardin_ironbreaker_gromril_attack_speed.buffs[1].icon = "bardin_ironbreaker_stamina_regen_during_gromril"
+BuffTemplates.bardin_ironbreaker_gromril_attack_speed.buffs[1].multiplier = 0.04
 BuffTemplates.bardin_ironbreaker_stacking_buff_gromril.buffs[1].pulse_frequency = 4
+BuffTemplates.bardin_ironbreaker_gromril_rising_anger.buffs[1].stat_buff = "attack_speed"
+BuffTemplates.bardin_ironbreaker_gromril_rising_anger.buffs[1].multiplier = 0.02
 --[DAWI DEFIANCE]:
-ProcFunctions.bardin_ironbreaker_regen_stamina_on_block_broken = function (player, buff, params)
+--Talents.dwarf_ranger[11].buffer = "server"
+Talents.dwarf_ranger[11].buffs = {
+	"bardin_ironbreaker_regen_stamina_on_gromril_removed"
+}
+ProcFunctions.bardin_ironbreaker_regen_stamina_on_gromril_lost = function (player, buff, params)
+		local player_unit = player.player_unit
+
+		if Unit.alive(player_unit) then
+			local status_extension = ScriptUnit.has_extension(player_unit, "status_system")
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			status_extension:remove_all_fatigue()
+			buff_extension:add_buff("bardin_ironbreaker_regen_stamina_on_block_broken_buff")
+		end
+	end
+--[[ProcFunctions.bardin_ironbreaker_regen_stamina_on_block_broken = function (player, buff, params)
 		local player_unit = player.player_unit
 
 		if Unit.alive(player_unit) then
@@ -1142,7 +1815,7 @@ ProcFunctions.bardin_ironbreaker_regen_stamina_on_block_broken = function (playe
 				buff_extension:add_buff("bardin_ironbreaker_regen_stamina_on_block_broken_buff")
 			end
 		end
-	end
+	end]]
 BuffTemplates.bardin_ironbreaker_regen_stamina_on_block_broken_buff = {
 	buffs = {
 			{
@@ -1154,7 +1827,31 @@ BuffTemplates.bardin_ironbreaker_regen_stamina_on_block_broken_buff = {
 				icon = "bardin_ironbreaker_regen_stamina_on_block_broken",
 				refresh_durations = true
 			}
+	}
+}
+--[[BuffTemplates.bardin_ironbreaker_regen_stamina_on_damage_taken = {
+	buffs = {
+		{
+			max_stacks = 1,
+			name = "bardin_ironbreaker_regen_stamina_on_damage_taken",
+			buff_func = "bardin_ironbreaker_regen_stamina_on_block_broken",
+			event_buff = true,
+			event = "on_damage_taken",
+			proc_chance = 0.5
 		}
+	}
+}]]
+BuffTemplates.bardin_ironbreaker_regen_stamina_on_gromril_removed = {
+	buffs = {
+		{
+			max_stacks = 1,
+			name = "bardin_ironbreaker_regen_stamina_on_gromril_removed",
+			buff_func = "bardin_ironbreaker_regen_stamina_on_gromril_lost",
+			event_buff = true,
+			event = "on_gromril_armour_removed",
+			proc_chance = 1
+		}
+	}
 }
 --[SLAYER]:
 --[A THOUSAND SPLIT SKULLS]:
@@ -1977,11 +2674,39 @@ ExplosionTemplates.sienna_unchained_burning_enemies_explosion.explosion.effect_n
 ExplosionTemplates.sienna_unchained_burning_enemies_explosion.explosion.radius_max = 1.5
 BuffTemplates.sienna_unchained_exploding_burning_enemies.buffs[1].proc_chance = 0.5
 --[OUTBURST]:
+ProcFunctions.sienna_burn_push_on_charged_attacks_remove = function (player, buff, params, world)
+		local player_unit = player.player_unit
+
+		if player and player.remote then
+			return
+		end
+
+		if Unit.alive(player_unit) then
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			local position = POSITION_LOOKUP[player_unit]
+
+			buff_extension:remove_buff(buff.id)
+			buff_extension:add_buff("sienna_unchained_push_arc_buff_sfx")
+
+			World.create_particles(world, "fx/wpnfx_fire_grenade_impact", position, Quaternion.identity())
+		end
+	end
 BuffTemplates.sienna_unchained_burn_push.buffs[1].stat_buff = "block_angle"
 BuffTemplates.sienna_unchained_burn_push.buffs[1].multiplier = 0.3
 BuffTemplates.sienna_unchained_push_arc_buff.buffs[1].stat_buff = "push_range"
 BuffTemplates.sienna_unchained_push_arc_buff.buffs[1].multiplier = nil
 BuffTemplates.sienna_unchained_push_arc_buff.buffs[1].bonus = 10
+BuffTemplates.sienna_unchained_push_arc_buff_sfx = {
+	activation_sound = "weapon_staff_fire_cone",
+	buffs = {
+		{
+			duration = 0.2,
+			max_stacks = 1,
+			--icon = "kerillian_thornsister_big_push",
+			name = "sienna_unchained_push_arc_buff_sfx"
+		}
+	}
+}
 --[NUMB TO PAIN]:
 Talents.bright_wizard[46].buffer = "both"
 Talents.bright_wizard[46].buffs = {
@@ -2106,6 +2831,21 @@ CareerAbilityBWUnchained._run_ability = function (self, new_initial_speed)
 		local overcharge_extension = ScriptUnit.extension(owner_unit, "overcharge_system")
 		overcharge_extension:reset()
 		career_extension:set_state("sienna_activate_unchained")
+		if buff_extension:has_buff_type("sienna_unchained_activated_ability_power_on_enemies_hit_buff1") then
+						if not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
+							overcharge_extension:reset()
+							overcharge_extension:add_charge(35)
+						elseif buff_extension:has_buff_type("traits_ranged_reduced_overcharge") and not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) then
+							overcharge_extension:reset()
+							overcharge_extension:add_charge(44)
+						elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
+							overcharge_extension:reset()
+							overcharge_extension:add_charge(50)
+						elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
+							overcharge_extension:reset()
+							overcharge_extension:add_charge(70)
+						end
+		end
 	end
 
 	local rotation = Unit.local_rotation(owner_unit, 0)
@@ -2244,8 +2984,6 @@ CareerAbilityBWUnchained._run_ability = function (self, new_initial_speed)
 
 	self:_play_vo()
 end
---[BOMB BALM]:
-BuffTemplates.sienna_unchained_activated_ability_pulse.buffs[1].icon = "sienna_unchained_activated_ability_temp_health"
 --[FUEL FOR THE FIRE]:
 BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit_buff1 = {
 		buffs = {
@@ -2254,6 +2992,7 @@ BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit_buff1 = {
 				multiplier = -1,
 				max_stacks = 1,
 				duration = 15,
+				apply_buff_func = "unchained_ability_power_on_enemies_hit_overcharge",
 				stat_buff = "reduced_overcharge_from_passive",
 				refresh_durations = true
 			}
@@ -2271,6 +3010,26 @@ BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit_buff2 = {
 			}
 		}
 	}
+BuffFunctionTemplates.functions.unchained_ability_power_on_enemies_hit_overcharge = function (unit, buff, params)
+	local overcharge_extension = ScriptUnit.extension(unit, "overcharge_system")
+	local buff_extension = ScriptUnit.extension(unit, "buff_system")
+	local talent_extension = ScriptUnit.has_extension(unit, "talent_system")
+	if talent_extension and talent_extension:has_talent("sienna_unchained_activated_ability_power_on_enemies_hit", "bright_wizard", true) then
+						if not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
+							--overcharge_extension:reset()
+							overcharge_extension:add_charge(35)
+						elseif buff_extension:has_buff_type("traits_ranged_reduced_overcharge") and not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) then
+							--overcharge_extension:reset()
+							overcharge_extension:add_charge(44)
+						elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
+							--overcharge_extension:reset()
+							overcharge_extension:add_charge(50)
+						elseif talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
+							--overcharge_extension:reset()
+							overcharge_extension:add_charge(70)
+						end
+	end
+end
 BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit_buff.buffs[1].icon = "sienna_unchained_max_overcharge"
 BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit.buffs[1].buff_to_add = nil
 BuffTemplates.sienna_unchained_activated_ability_power_on_enemies_hit.buffs[1].buffs_to_add = {
@@ -2291,7 +3050,7 @@ ProcFunctions.sienna_unchained_activated_ability_power_on_enemies_hit = function
 					local buff_template = buff.template
 					local buff_list = buff_template.buffs_to_add
 					local buff_extension = ScriptUnit.has_extension(player_unit, "buff_system")
-					if talent_extension:has_talent("sienna_unchained_activated_ability_power_on_enemies_hit", "bright_wizard", true) then
+					--[[if talent_extension:has_talent("sienna_unchained_activated_ability_power_on_enemies_hit", "bright_wizard", true) then
 						if not talent_extension:has_talent("sienna_unchained_reduced_overcharge", "bright_wizard", true) and not buff_extension:has_buff_type("traits_ranged_reduced_overcharge") then
 							overcharge_extension:reset()
 							overcharge_extension:add_charge(35)
@@ -2305,7 +3064,7 @@ ProcFunctions.sienna_unchained_activated_ability_power_on_enemies_hit = function
 							overcharge_extension:reset()
 							overcharge_extension:add_charge(70)
 						end
-					end
+					end]]
 
 					for i = 1, #buff_list, 1 do
 					local buff_name = buff_list[i]
@@ -2543,7 +3302,7 @@ HTDamageProfileTemplates.unchained_ability_blazing_crescendo = {
 		damage_type = "grenade",
 		power_distribution = {
 			attack = 0.45,
-			impact = 2
+			impact = 1.65
 		}
 	}
 }
@@ -2584,13 +3343,10 @@ mod:hook(_G, "Localize", function(func, key, ...)
     return "Completely absorb the overcharge generated from a hit every 10 seconds."
   end
   if key == "sienna_unchained_activated_ability_fire_aura_desc" then
-    return "Increase radius of Living Bomb explosion by 100 percent. Also increases the damage and stagger power of the explosion."
+    return "Living Bomb explosion radius is increased by 100 percent and grants Sienna a scorching aura that ignites nearby enemies, causing damage over time. The damage and stagger power of the explosion is also increased."
   end
   if key == "sienna_unchained_activated_ability_fire_aura" then
     return "Blazing Crescendo"
-  end
-  if key == "sienna_unchained_activated_ability_temp_health_desc" then
-    return "Living Bomb grants Sienna a scorching aura that ignites nearby enemies, causing damage over time and grants 30 temporary health to allies."
   end
   if key == "sienna_adept_increased_burn_damage_reduced_non_burn_damage_desc" then
     return "Burning damage over time is increased by 75 percent. All non-burn damage is reduced by 15 percent."
@@ -2611,7 +3367,7 @@ mod:hook(_G, "Localize", function(func, key, ...)
     return "Increases push/block angle by 30 percent. Pushing an enemy ignites them, causing damage over time. Heavy attacks increase the range of the next push by 100 percent."
   end
   if key == "victor_zealot_reduced_damage_taken_desc" then
-    return "Killing an enemy allows Victor to resist death for 1.5 seconds."
+    return "Killing an enemy allows Victor to resist death for 2 seconds."
   end
   if key == "victor_zealot_power_desc" then
     return "Taking damage increases melee power by 15 percent for 5 seconds."
@@ -2623,7 +3379,7 @@ mod:hook(_G, "Localize", function(func, key, ...)
     return "Master of the Skirmish"
   end
   if key == "markus_huntsman_movement_speed_desc" then
-    return "Ranged headshots increase movement speed by 15 percent for 3 seconds. Ranged attacks that aren't suffering from damage drop off have improved armour penetration."
+    return "Ranged headshots increase movement speed by 15 percent for 3 seconds. Close quarters ranged attacks have improved armour penetration."
   end
   if key == "markus_huntsman_movement_speed_desc_2" then
     return "Killing a Special or Elite enemy reduces damage taken by 10 percent and increases attack speed by 2.5 percent. Stacks 4 times. Taking a hit removes one stack."
@@ -2632,7 +3388,7 @@ mod:hook(_G, "Localize", function(func, key, ...)
     return "Killing an enemy with Blessed Blade increases movement speed by 35 percent and attack speed by 10 percent for 15 seconds. Markus also resists ranged knockback during this time."
   end
   if key == "bardin_ironbreaker_party_power_on_blocked_attacks_desc" then
-    return "Blocking an attack or staggering an Elite enemy increases Bardin's melee power (and that of nearby allies) by 2 percent for 10 seconds. Stacks 5 times."
+    return "Blocking an attack or staggering an Elite enemy increases the melee power of Bardin and his allies by 2 percent for 15 seconds. Stacks 5 times."
   end
   if key == "bardin_ranger_movement_speed_desc" then
     return "Increases movement speed by 10 percent. When Bardin picks up a consumable, he receives a buff related to that item. 30 second cooldown."
