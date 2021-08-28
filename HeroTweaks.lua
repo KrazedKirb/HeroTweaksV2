@@ -53,7 +53,221 @@ for buff_name, buff_settings in pairs(BuffTemplates) do
         buff_settings.buffs[1].perk = "conqueror_healing"
     end
 end
---[ACTION TEMPLATES]:
+--[HEADSHOT/CRIT TEMP HP]:
+ProcFunctions.heal_finesse_damage_on_melee = function (player, buff, params)
+	if not Managers.state.network.is_server then
+			return
+	end
+
+	local player_unit = player.player_unit
+	local heal_amount_light = 2.5 
+	local heal_amount_light_dual = 1.25
+	local heal_amount_heavy = 5
+	local heal_amount_heavy_dual =  2.5
+	local heal_amount_crit_light = 1.5
+	local heal_amount_crit_light_dual = 0.75
+	local heal_amount_crit_heavy = 3
+	local heal_amount_crit_heavy_dual = 1.5
+	local max_targets = 3 
+
+	local hit_unit = params[1]
+	local hit_zone_name = params[3]
+	local target_number = params[4]
+	local attack_type = params[2]
+	local critical_hit = params[6]
+	local breed = AiUtils.unit_breed(hit_unit)
+
+	local inventory_extension = ScriptUnit.extension(player_unit, "inventory_system")
+	local wielded_slot_data = inventory_extension:get_wielded_slot_data("slot_melee")
+	local wielded_slot_template = inventory_extension:get_item_template(wielded_slot_data)
+	local is_action_dual_wield_attack = wielded_slot_template.dual_wield_attack
+
+	if target_number <= max_targets then
+		if target_number == 1 then
+			if ALIVE[player_unit] and breed and (attack_type == "light_attack") then
+				--mod:echo("checked for dual wield attack right")
+				if (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
+
+					DamageUtils.heal_network(player_unit, player_unit, heal_amount_light, "heal_from_proc")
+				end
+
+				if critical_hit then
+
+					DamageUtils.heal_network(player_unit, player_unit, heal_amount_crit_light, "heal_from_proc")
+				end
+			end
+
+			if ALIVE[player_unit] and breed and (attack_type == "heavy_attack") then
+				--mod:echo("checked for dual wield attack right")
+				if not is_action_dual_wield_attack and (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
+
+					DamageUtils.heal_network(player_unit, player_unit, heal_amount_heavy, "heal_from_proc")
+				elseif is_action_dual_wield_attack and (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
+
+					DamageUtils.heal_network(player_unit, player_unit, heal_amount_heavy_dual, "heal_from_proc")
+					--mod:echo("DUAL WIELD HEAVY RIGHT")
+				end
+
+				if not is_action_dual_wield_attack and critical_hit then
+					
+					DamageUtils.heal_network(player_unit, player_unit, heal_amount_crit_heavy, "heal_from_proc")
+				elseif is_action_dual_wield_attack and critical_hit then
+					DamageUtils.heal_network(player_unit, player_unit, heal_amount_crit_heavy_dual, "heal_from_proc")
+
+					--mod:echo("DUAL WIELD HEAVY CRIT RIGHT")
+				end
+			end
+		end
+
+		if target_number == 2 then
+			local heal_cleave_headshot = 2
+			local heal_cleave_crit = 1
+
+			if (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
+
+				DamageUtils.heal_network(player_unit, player_unit, heal_cleave_headshot, "heal_from_proc")
+				--mod:echo("target_number == 2 headshot")
+			end
+
+			if critical_hit then
+
+				DamageUtils.heal_network(player_unit, player_unit, heal_cleave_crit, "heal_from_proc")
+				--mod:echo("target_number == 2 crit")
+			end
+		end
+		if target_number == 3 then
+			local heal_cleave_headshot = 1
+			local heal_cleave_crit = 0.5
+
+			if (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
+
+				DamageUtils.heal_network(player_unit, player_unit, heal_cleave_headshot, "heal_from_proc")
+				--mod:echo("target_number == 3 headshot")
+			end
+
+			if critical_hit then
+
+				DamageUtils.heal_network(player_unit, player_unit, heal_cleave_crit, "heal_from_proc")
+				--mod:echo("target_number == 3 crit")
+			end
+		end
+	end
+end
+--apply dual_wield_attack to appropriate attacks
+--axe n falchion
+Weapons.dual_wield_axe_falchion_template.dual_wield_attack = true
+--dual axe
+Weapons.dual_wield_axes_template_1.dual_wield_attack = true
+--dual daggers
+Weapons.dual_wield_daggers_template_1.dual_wield_attack = true
+--mace and sword
+Weapons.dual_wield_hammer_sword_template.dual_wield_attack = true
+--dual hammers
+Weapons.dual_wield_hammers_template.dual_wield_attack = true
+--sword and dagger
+Weapons.dual_wield_sword_dagger_template_1.dual_wield_attack = true
+--dual swords
+Weapons.dual_wield_swords_template_1.dual_wield_attack = true
+--[TRIGGER PROCS]:
+ProcEvents = {
+	"on_hit",
+	"on_kill",
+	"on_kill_elite_special",
+	"on_boss_killed",
+	"on_special_killed",
+	"on_elite_killed",
+	"on_ping_target_killed",
+	"on_block",
+	"on_block_broken",
+	"on_timed_block",
+	"on_knocked_down",
+	"on_ledge_hang_start",
+	"on_player_disabled",
+	"on_ally_knocked_down",
+	"on_revived",
+	"on_revived_ally",
+	"on_healed",
+	"on_healed_ally",
+	"on_healed_consumeable",
+	"on_assisted",
+	"on_assisted_ally",
+	"on_push",
+	"on_damage_taken",
+	"on_consumable_picked_up",
+	"on_reload",
+	"on_ammo_used",
+	"on_unwield",
+	"on_critical_hit",
+	"on_last_ammo_used",
+	"on_gained_ammo_from_no_ammo",
+	"on_player_damage_dealt",
+	"on_stagger",
+	"on_charge_ability_hit",
+	"on_charge_ability_hit_blast",
+	"on_bardin_consumable_picked_up_any_player",
+	"on_dodge",
+	"on_dodge_finished",
+	"on_leap_start",
+	"on_leap_finished",
+	"on_enemy_pinged",
+	"on_start_action",
+	"on_full_charge_action",
+	"on_enemy_ignited",
+	"on_auto_headshot",
+	"on_potion_consumed",
+	"on_ability_activated",
+	"on_dot_damage_dealt",
+	"on_inventory_post_apply_buffs",
+	"on_death",
+	"on_damage_dealt",
+	"on_push_used",
+	"on_backstab",
+	"on_sweep",
+	"on_ranged_hit",
+	"on_critical_sweep",
+	"on_critical_shot",
+	"on_critical_action",
+	"on_spell_used",
+	"on_grenade_use",
+	"on_full_charge",
+	"on_charge_finished",
+	"on_ability_recharged",
+	"on_ability_cooldown_started",
+	"on_extra_ability_consumed",
+	"on_gromril_armour_removed",
+	"on_shield_break"
+}
+--trigger break shield proc
+AIShieldUserExtension.break_shield = function (self, attacker_unit)
+	--assert(attacker_unit)
+	self:set_is_blocking(false)
+
+	self.shield_broken = true
+	local unit = self._unit
+	local blackboard = self._blackboard
+	blackboard.shield_breaking_hit = true
+	blackboard.shield_user = false
+	local ai_inventory_extension = ScriptUnit.extension(unit, "ai_inventory_system")
+	local inventory_item_definitions = ai_inventory_extension.inventory_item_definitions
+	local reason = "shield_break"
+	local network_transmit = Managers.state.network.network_transmit
+	local game_object_id = Managers.state.unit_storage:go_id(unit)
+	local reason_id = NetworkLookup.item_drop_reasons[reason]
+
+	for i = 1, #inventory_item_definitions, 1 do
+		local item = inventory_item_definitions[i]
+		local success, item_unit = ai_inventory_extension:drop_single_item(i, reason)
+		local attacker_unit_buff_extension = ScriptUnit.has_extension(attacker_unit, "buff_system")
+
+		if success then
+			network_transmit:send_rpc_clients("rpc_ai_drop_single_item", game_object_id, i, reason_id)
+			if attacker_unit_buff_extension then
+				attacker_unit_buff_extension:trigger_procs("on_shield_break")
+				mod:echo("broke shield proc")
+			end
+		end
+	end
+end
 -------------------------------------------------------
 --					//////[KRUBER]\\\\\\
 -------------------------------------------------------
@@ -1364,14 +1578,15 @@ CareerAbilityWHZealot.update = function (self, unit, input, dt, context, t)
 			local unit_object_id = network_manager:unit_game_object_id(owner_unit)
 			local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
 
-			if is_server then
-				buff_extension:add_buff(buff_name, {
+			buff_extension:add_buff("zealot_flaggelate_damage")
+			--if is_server then
+				--[[buff_extension:add_buff(buff_name, {
 					attacker_unit = owner_unit
-				})
-				network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+				})]]
+			--[[	network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
 			else
 				network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
-			end	
+			end]]
 		end
 
 		if input_extension:get("weapon_reload") then
@@ -2131,7 +2346,8 @@ BuffTemplates.bardin_ironbreaker_gromril_rising_anger.buffs[1].multiplier = 0.02
 --[DAWI DEFIANCE]:
 --Talents.dwarf_ranger[11].buffer = "server"
 Talents.dwarf_ranger[11].buffs = {
-	"bardin_ironbreaker_regen_stamina_on_gromril_removed"
+	--"bardin_ironbreaker_regen_stamina_on_gromril_removed"
+	"bardin_ironbreaker_attack_speed_on_shield_break"
 }
 ProcFunctions.bardin_ironbreaker_regen_stamina_on_gromril_lost = function (player, buff, params)
 		local player_unit = player.player_unit
@@ -2195,6 +2411,36 @@ BuffTemplates.bardin_ironbreaker_regen_stamina_on_gromril_removed = {
 		}
 	}
 }
+BuffTemplates.bardin_ironbreaker_attack_speed_on_shield_break = {
+	buffs = {
+		{
+			max_stacks = 1,
+			name = "bardin_ironbreaker_attack_speed_on_shield_break",
+			event_buff = true,
+			event = "on_shield_break",
+			perk = "shield_break",
+			buff_func = "bardin_ironbreaker_attack_speed_on_shield_break"
+		}
+	}
+}
+BuffTemplates.bardin_ironbreaker_attack_speed_on_shield_break_buff = {
+	buffs = {
+		{
+			max_stacks = 1,
+			name = "bardin_ironbreaker_attack_speed_on_shield_break_buff",
+			stat_buff = "attack_speed",
+			multiplier = 0.75,
+			icon = "bardin_ironbreaker_regen_stamina_on_block_broken"
+		}
+	}
+}
+ProcFunctions.bardin_ironbreaker_attack_speed_on_shield_break = function (player, buff, params)
+	local player_unit = player.player_unit
+	if Unit.alive(player_unit) then
+
+		buff_extension:add_buff("bardin_ironbreaker_attack_speed_on_shield_break_buff")
+	end
+end
 --[SLAYER]:
 --[A THOUSAND SPLIT SKULLS]:
 Talents.dwarf_ranger[24].buffs = {
