@@ -4,6 +4,242 @@ local mod = get_mod("HeroTweaks")
 -------------------------------------------------------
 --[NETWORK LOOKUP]
 --[PING SYSTEM]:
+
+PingTargetExtension.set_pinged = function (self, pinged, flash, pinger_unit, show_outline)
+	local owner_unit = self._unit
+
+	if show_outline == nil then
+		show_outline = true
+	end
+
+	if pinged then
+		self._pinged = self._pinged + 1
+	else
+		self._pinged = self._pinged - 1
+	end
+
+	if self._outline_extension then
+		if show_outline then
+			if pinged then
+				local buff_extension = self._buff_extension
+				local ping_outline_template = table.shallow_copy(OutlineSettings.templates.ping_unit, true)
+
+				if buff_extension then
+					local has_whc_improved_damage_debuff = buff_extension:num_buff_type("victor_witchhunter_improved_damage_taken_ping")
+
+					if has_whc_improved_damage_debuff then
+						--mod:echo("checking tag level...")
+						if has_whc_improved_damage_debuff == 1 then
+							ping_outline_template = table.shallow_copy(OutlineSettings.templates.whc_tag_improved_1, true)
+							--mod:echo("level 2")
+						elseif has_whc_improved_damage_debuff == 2 then
+							--mod:echo("level 3")
+							ping_outline_template = table.shallow_copy(OutlineSettings.templates.whc_tag_improved_2, true)
+						elseif has_whc_improved_damage_debuff >= 3 then
+							--mod:echo("level 4")
+							ping_outline_template = table.shallow_copy(OutlineSettings.templates.whc_tag_improved_3, true)
+						else
+							--mod:echo("level 1")
+							ping_outline_template = table.shallow_copy(OutlineSettings.templates.ping_unit, true)
+						end
+					else
+						--mod:echo("no improved tag")
+						ping_outline_template = table.shallow_copy(OutlineSettings.templates.ping_unit, true)
+					end
+				end
+				
+				ping_outline_template.method = self._outline_extension.pinged_method
+				local outline_id = self._outline_extension:add_outline(ping_outline_template)
+				self._outline_ids[pinger_unit] = outline_id
+			else
+				local outline_id = self._outline_ids[pinger_unit]
+
+				self._outline_extension:remove_outline(outline_id)
+
+				self._outline_ids[pinger_unit] = nil
+			end
+		end
+
+		if pinged then
+			self:_add_witch_hunter_buff(pinger_unit)
+		end
+	end
+
+	if Unit.alive(owner_unit) then
+		local breed = Unit.get_data(owner_unit, "breed")
+
+		if breed then
+			local pinger_buff_extension = ScriptUnit.has_extension(pinger_unit, "buff_system")
+
+			if pinger_buff_extension then
+				pinger_buff_extension:trigger_procs("on_enemy_pinged", owner_unit, pinger_unit)
+			end
+
+			local proximity_extension = ScriptUnit.has_extension(owner_unit, "proximity_system")
+
+			if proximity_extension then
+				proximity_extension.has_been_seen = true
+			end
+		end
+	end
+
+	if self._locomotion_extension and self._locomotion_extension.bone_lod_extension_id then
+		local bone_lod_extension_id = self._locomotion_extension.bone_lod_extension_id
+
+		EngineOptimized.bone_lod_set_ignore_umbra(bone_lod_extension_id, pinged)
+	end
+end
+--[[OutlineSettings.colors.whc_1 = { --orangeish yellow
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_red",
+		channel = {
+			255,
+			255,
+			0,
+			0
+		},
+		color = {
+			255,
+			255,
+			255,
+			0
+		}
+	}]]
+--[[OutlineSettings.colors.whc_1 = { --cyan
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_blue",
+		channel = {
+			255,
+			0,
+			0,
+			255
+		},
+		color = {
+			255,
+			0,
+			255,
+			255
+		}
+	}]]
+OutlineSettings.colors.whc_1 = { --white
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_green",
+		channel = {
+			0,
+			0,
+			255,
+			0
+		},
+		color = {
+			255,
+			255,
+			255,
+			255
+		}
+	}
+--[[OutlineSettings.colors.whc_2 = { --purple
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_blue",
+		channel = {
+			0,
+			255,
+			0,
+			255
+		},
+		color = {
+			255,
+			255,
+			255,
+			0
+		}
+	}]]
+--[[OutlineSettings.colors.whc_2 = { --cyan
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_blue",
+		channel = {
+			255,
+			0,
+			0,
+			255
+		},
+		color = {
+			255,
+			0,
+			255,
+			255
+		}
+	}]]
+OutlineSettings.colors.whc_2 = { --orangeish yellow
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_red",
+		channel = {
+			255,
+			255,
+			0,
+			0
+		},
+		color = {
+			255,
+			255,
+			255,
+			0
+		}
+	}
+OutlineSettings.colors.whc_3 = { --red
+		variable = "outline_color_blurple",
+		outline_multiplier = 6,
+		pulse_multiplier = 15,
+		pulsate = true,
+		outline_multiplier_variable = "outline_multiplier_red",
+		channel = {
+			0,
+			255,
+			0,
+			0
+		},
+		color = {
+			255,
+			227,
+			4,
+			4
+		}
+	}
+OutlineSettings.templates.whc_tag_improved_1 = {
+	priority = 8,
+	method = "ai_alive",
+	outline_color = OutlineSettings.colors.whc_1,
+	flag = OutlineSettings.flags.non_wall_occluded
+}
+OutlineSettings.templates.whc_tag_improved_2 = {
+	priority = 8,
+	method = "ai_alive",
+	outline_color = OutlineSettings.colors.whc_2,
+	flag = OutlineSettings.flags.non_wall_occluded
+}
+OutlineSettings.templates.whc_tag_improved_3 = {
+	priority = 8,
+	method = "ai_alive",
+	outline_color = OutlineSettings.colors.whc_3,
+	flag = OutlineSettings.flags.non_wall_occluded
+}
 --[HEAL SHARE]:
 local PlayerUnitStatusSettings = PlayerUnitStatusSettings
 PlayerUnitStatusSettings.CONQUEROR_DEGEN_DELAY = math.huge
@@ -168,106 +404,7 @@ Weapons.dual_wield_hammers_template.dual_wield_attack = true
 Weapons.dual_wield_sword_dagger_template_1.dual_wield_attack = true
 --dual swords
 Weapons.dual_wield_swords_template_1.dual_wield_attack = true
---[TRIGGER PROCS]:
-ProcEvents = {
-	"on_hit",
-	"on_kill",
-	"on_kill_elite_special",
-	"on_boss_killed",
-	"on_special_killed",
-	"on_elite_killed",
-	"on_ping_target_killed",
-	"on_block",
-	"on_block_broken",
-	"on_timed_block",
-	"on_knocked_down",
-	"on_ledge_hang_start",
-	"on_player_disabled",
-	"on_ally_knocked_down",
-	"on_revived",
-	"on_revived_ally",
-	"on_healed",
-	"on_healed_ally",
-	"on_healed_consumeable",
-	"on_assisted",
-	"on_assisted_ally",
-	"on_push",
-	"on_damage_taken",
-	"on_consumable_picked_up",
-	"on_reload",
-	"on_ammo_used",
-	"on_unwield",
-	"on_critical_hit",
-	"on_last_ammo_used",
-	"on_gained_ammo_from_no_ammo",
-	"on_player_damage_dealt",
-	"on_stagger",
-	"on_charge_ability_hit",
-	"on_charge_ability_hit_blast",
-	"on_bardin_consumable_picked_up_any_player",
-	"on_dodge",
-	"on_dodge_finished",
-	"on_leap_start",
-	"on_leap_finished",
-	"on_enemy_pinged",
-	"on_start_action",
-	"on_full_charge_action",
-	"on_enemy_ignited",
-	"on_auto_headshot",
-	"on_potion_consumed",
-	"on_ability_activated",
-	"on_dot_damage_dealt",
-	"on_inventory_post_apply_buffs",
-	"on_death",
-	"on_damage_dealt",
-	"on_push_used",
-	"on_backstab",
-	"on_sweep",
-	"on_ranged_hit",
-	"on_critical_sweep",
-	"on_critical_shot",
-	"on_critical_action",
-	"on_spell_used",
-	"on_grenade_use",
-	"on_full_charge",
-	"on_charge_finished",
-	"on_ability_recharged",
-	"on_ability_cooldown_started",
-	"on_extra_ability_consumed",
-	"on_gromril_armour_removed",
-	"on_shield_break"
-}
---trigger break shield proc
-AIShieldUserExtension.break_shield = function (self, attacker_unit)
-	--assert(attacker_unit)
-	self:set_is_blocking(false)
-
-	self.shield_broken = true
-	local unit = self._unit
-	local blackboard = self._blackboard
-	blackboard.shield_breaking_hit = true
-	blackboard.shield_user = false
-	local ai_inventory_extension = ScriptUnit.extension(unit, "ai_inventory_system")
-	local inventory_item_definitions = ai_inventory_extension.inventory_item_definitions
-	local reason = "shield_break"
-	local network_transmit = Managers.state.network.network_transmit
-	local game_object_id = Managers.state.unit_storage:go_id(unit)
-	local reason_id = NetworkLookup.item_drop_reasons[reason]
-
-	for i = 1, #inventory_item_definitions, 1 do
-		local item = inventory_item_definitions[i]
-		local success, item_unit = ai_inventory_extension:drop_single_item(i, reason)
-		local attacker_unit_buff_extension = ScriptUnit.has_extension(attacker_unit, "buff_system")
-
-		if success then
-			network_transmit:send_rpc_clients("rpc_ai_drop_single_item", game_object_id, i, reason_id)
-			if attacker_unit_buff_extension then
-				attacker_unit_buff_extension:trigger_procs("on_shield_break")
-				mod:echo("broke shield proc")
-			end
-		end
-	end
-end
+--[UNINTERRUPTIBLE REVIVES]:
 -------------------------------------------------------
 --					//////[KRUBER]\\\\\\
 -------------------------------------------------------
@@ -714,31 +851,9 @@ ProcFunctions.markus_questing_knight_ability_kill_buff_func = function (player, 
 --[WITCH HUNTER CAPTAIN:]
 --[TEMPLAR'S KNOWLEDGE]:
 BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].max_stacks = 4
---BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].duration = 15
---BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].refresh_durations = true
+BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].duration = 15
 --[BOUNTY HUNTER]:
---[temp hp on cleave]
---[[BuffTemplates.victor_bountyhunter_reaper = {
-	buffs = {
-		{
-			multiplier = -0.05,
-			name = "reaper",
-			event_buff = true,
-			buff_func = "heal_damage_targets_on_melee",
-			event = "on_player_damage_dealt",
-			perk = "linesman_healing",
-			max_targets = 5,
-			bonus = 0.25
-		}
-	}
-}
-Talents.witch_hunter[20].description = "reaper_desc"
-Talents.witch_hunter[20].description_values[1] = {
-	value = BuffTemplates.reaper.buffs[1].max_targets
-}
-Talents.witch_hunter[20].buffs = {
-	"victor_bountyhunter_reaper"
-}]]
+
 --[steel crescendo]
 Talents.witch_hunter[22].buffs = {
 	"victor_bountyhunter_steel_crescendo"
@@ -809,7 +924,6 @@ BuffTemplates.victor_bountyhunter_steel_crescendo_buff_attack_speed = {
 			name = "victor_bountyhunter_steel_crescendo_buff_attack_speed",
 			stat_buff = "attack_speed",
 			multiplier = 0.1,
-			--icon = "victor_bountyhunter_melee_damage_on_no_ammo",
 			duration = 10,
 			refresh_durations = true,
 			max_stacks = 1
@@ -1003,13 +1117,6 @@ BuffFunctionTemplates.functions.add_victor_bountyhunter_refresh_blessed_shot_on_
 		end
 	end
 end
---[[BuffFunctionTemplates.functions.add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed_guaranteed = function (unit, buff, params)
-	local player_unit = unit
-	if Unit.alive(player_unit) then
-		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-		buff_extension:add_buff("victor_bountyhunter_refresh_blessed_shot_timer_guaranteed")
-	end
-end]]
 BuffFunctionTemplates.functions.victor_bountyhunter_remove_passive_cooldown_on_remove = function (unit, buff, params)
 	local player_unit = unit
 	if Unit.alive(player_unit) then
@@ -1046,7 +1153,7 @@ BuffTemplates.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit = {
 			max_stacks = 1,
 			event = "on_hit",
 			buff_to_add = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff",
-			buff_to_add_1 = "victor_bountyhunter_refresh_blessed_shot_timer_guaranteed", --"victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_guaranteed",
+			buff_to_add_1 = "victor_bountyhunter_refresh_blessed_shot_timer_guaranteed", 
 			event_buff = true,
 			buff_func = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit"
 		}
@@ -1057,7 +1164,7 @@ BuffTemplates.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff = {
 		{
 			name = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff",
 			max_stacks = 1,
-			duration = 0, --0.1,
+			duration = 0,
 			proc_chance = 1,
 			remove_buff_func = "add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed"
 		}
@@ -1068,7 +1175,7 @@ BuffTemplates.victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_gua
 		{
 			name = "victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_guaranteed",
 			max_stacks = 1,
-			duration = 0, --0.1,
+			duration = 0,
 			remove_buff_func = "add_victor_bountyhunter_refresh_blessed_shot_on_headshot_crit_buff_delayed_guaranteed"
 		}
 	}
@@ -1079,8 +1186,7 @@ BuffTemplates.victor_bountyhunter_refresh_blessed_shot_timer = {
 			name = "victor_bountyhunter_refresh_blessed_shot_timer",
 			max_stacks = 1,
 			is_cooldown = true,
-			duration = 0, --0.05,
-			--icon = "victor_witchhunter_power_level_unbalance",
+			duration = 0,
 			buff_after_delay = true,
 			delayed_buff_name = "victor_bountyhunter_passive_crit_buff",
 			remove_buff_func = "victor_bountyhunter_remove_passive_cooldown_on_remove"
@@ -1093,8 +1199,7 @@ BuffTemplates.victor_bountyhunter_refresh_blessed_shot_timer_guaranteed = {
 			name = "victor_bountyhunter_refresh_blessed_shot_timer_guaranteed",
 			max_stacks = 1,
 			is_cooldown = true,
-			duration = 0, --0.05,
-			--icon = "victor_witchhunter_power_level_unbalance",
+			duration = 0, 
 			buff_after_delay = true,
 			delayed_buff_name = "victor_bountyhunter_passive_crit_buff",
 			remove_buff_func = "victor_bountyhunter_remove_passive_cooldown_on_remove_guaranteed"
@@ -1136,8 +1241,7 @@ ProcFunctions.victor_bountyhunter_rile_the_mob = function (player, buff, params)
 				local range_squared = range * range
 				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
 				local buff_to_add_1 = buff_template.buff_to_add_1
-				--local buff_to_add_2 = buff_template.buff_to_add_2
-				--local buff_to_add_3 = buff_template.buff_to_add_3
+	
 				local buffs_to_add = {
 							"victor_bountyhunter_party_movespeed_on_ranged_crit_buff",
 							"victor_bountyhunter_party_dodge_distance_on_ranged_crit_buff",
@@ -1145,8 +1249,6 @@ ProcFunctions.victor_bountyhunter_rile_the_mob = function (player, buff, params)
 						}
 
 				buff_extension:add_buff(buff_to_add_1)
-				--buff_extension:add_buff(buff_to_add_2)
-				--buff_extension:add_buff(buff_to_add_3)
 
 				for i = 1, num_targets, 1 do
 					local target_unit = player_and_bot_units[i]
@@ -1174,8 +1276,7 @@ ProcFunctions.victor_bountyhunter_rile_the_mob = function (player, buff, params)
 end
 BuffTemplates.victor_bountyhunter_party_movespeed_on_ranged_crit.buffs[1].buff_func = "victor_bountyhunter_rile_the_mob"
 BuffTemplates.victor_bountyhunter_party_movespeed_on_ranged_crit.buffs[1].buff_to_add_1 = "victor_bountyhunter_movespeed_on_ranged_crit_buff"
---BuffTemplates.victor_bountyhunter_party_movespeed_on_ranged_crit.buffs[1].buff_to_add_2 = "victor_bountyhunter_dodge_distance_on_ranged_crit_buff"
---BuffTemplates.victor_bountyhunter_party_movespeed_on_ranged_crit.buffs[1].buff_to_add_3 = "victor_bountyhunter_dodge_speed_on_ranged_crit_buff"
+
 BuffTemplates.victor_bountyhunter_movespeed_on_ranged_crit_buff = {
 	buffs = {
 		{
@@ -1202,7 +1303,6 @@ BuffTemplates.victor_bountyhunter_party_dodge_distance_on_ranged_crit_buff = {
 			max_stacks = 1,
 			remove_buff_func = "remove_movement_buff",
 			apply_buff_func = "apply_movement_buff",
-			--icon = "victor_witchhunter_dodge_range",
 			path_to_movement_setting_to_modify = {
 				"dodging",
 				"distance_modifier"
@@ -1219,7 +1319,6 @@ BuffTemplates.victor_bountyhunter_party_dodge_speed_on_ranged_crit_buff = {
 			multiplier = 1.1,
 			max_stacks = 1,
 			remove_buff_func = "remove_movement_buff",
-			--icon = "victor_witchhunter_dodge_range",
 			apply_buff_func = "apply_movement_buff",
 			path_to_movement_setting_to_modify = {
 				"dodging",
@@ -1228,40 +1327,6 @@ BuffTemplates.victor_bountyhunter_party_dodge_speed_on_ranged_crit_buff = {
 		}
 	}
 }
---[[BuffTemplates.victor_bountyhunter_dodge_distance_on_ranged_crit_buff = {
-	buffs = {
-		{
-			name = "victor_bountyhunter_dodge_distance_on_ranged_crit_buff",
-			duration = 10,
-			multiplier = 1.1,
-			refresh_durations = true,
-			remove_buff_func = "remove_movement_buff",
-			apply_buff_func = "apply_movement_buff",
-			icon = "victor_captain_activated_ability_stagger_ping_debuff",
-			path_to_movement_setting_to_modify = {
-				"dodging",
-				"distance_modifier"
-			}
-		}
-	}
-}
-BuffTemplates.victor_bountyhunter_dodge_speed_on_ranged_crit_buff = {
-	buffs = {
-		{
-			name = "victor_bountyhunter_dodge_speed_on_ranged_crit_buff",
-			duration = 10,
-			refresh_durations = true,
-			multiplier = 1.1,
-			remove_buff_func = "remove_movement_buff",
-			icon = "victor_captain_activated_ability_stagger_ping_debuff",
-			apply_buff_func = "apply_movement_buff",
-			path_to_movement_setting_to_modify = {
-				"dodging",
-				"speed_modifier"
-			}
-		}
-	}
-}]]
 --[salvage]
 ProcFunctions.victor_bounty_hunter_ammo_fraction_gain_out_of_ammo = function (player, buff, params)
 		local player_unit = player.player_unit
@@ -1434,7 +1499,6 @@ BuffTemplates.victor_bountyhunter_blast_penetration_buff = {
 	}
 }
 --buckshot wep CHANGES
---Weapons.victor_bountyhunter_career_skill_weapon.actions.action_career_release.default.shot_count = 15
 ActionBountyHunterHandgun._shotgun_shoot = function (self)
 	local world = self.world
 	local owner_unit = self.owner_unit
@@ -2344,101 +2408,55 @@ BuffTemplates.bardin_ironbreaker_stacking_buff_gromril.buffs[1].pulse_frequency 
 BuffTemplates.bardin_ironbreaker_gromril_rising_anger.buffs[1].stat_buff = "attack_speed"
 BuffTemplates.bardin_ironbreaker_gromril_rising_anger.buffs[1].multiplier = 0.02
 --[DAWI DEFIANCE]:
---Talents.dwarf_ranger[11].buffer = "server"
 Talents.dwarf_ranger[11].buffs = {
-	--"bardin_ironbreaker_regen_stamina_on_gromril_removed"
-	"bardin_ironbreaker_attack_speed_on_shield_break"
+	"bardin_ironbreaker_shield_breaking_above_half_stamina"
 }
-ProcFunctions.bardin_ironbreaker_regen_stamina_on_gromril_lost = function (player, buff, params)
-		local player_unit = player.player_unit
-
-		if Unit.alive(player_unit) then
-			local status_extension = ScriptUnit.has_extension(player_unit, "status_system")
-			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-			status_extension:remove_all_fatigue()
-			buff_extension:add_buff("bardin_ironbreaker_regen_stamina_on_block_broken_buff")
-		end
-	end
---[[ProcFunctions.bardin_ironbreaker_regen_stamina_on_block_broken = function (player, buff, params)
-		local player_unit = player.player_unit
-
-		if Unit.alive(player_unit) then
-			local template = buff.template
-			local procced = math.random() <= template.proc_chance
-
-			if procced then
-				local status_extension = ScriptUnit.has_extension(player_unit, "status_system")
-				local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-				status_extension:remove_all_fatigue()
-				buff_extension:add_buff("bardin_ironbreaker_regen_stamina_on_block_broken_buff")
-			end
-		end
-	end]]
-BuffTemplates.bardin_ironbreaker_regen_stamina_on_block_broken_buff = {
-	buffs = {
-			{
-				max_stacks = 1,
-				duration = 5,
-				remove_buff_func = "remove_always_blocking",
-				name = "bardin_ironbreaker_regen_stamina_on_block_broken_buff",
-				apply_buff_func = "apply_always_blocking",
-				icon = "bardin_ironbreaker_regen_stamina_on_block_broken",
-				refresh_durations = true
-			}
-	}
-}
---[[BuffTemplates.bardin_ironbreaker_regen_stamina_on_damage_taken = {
+BuffTemplates.bardin_ironbreaker_shield_breaking_above_half_stamina = {
 	buffs = {
 		{
 			max_stacks = 1,
-			name = "bardin_ironbreaker_regen_stamina_on_damage_taken",
-			buff_func = "bardin_ironbreaker_regen_stamina_on_block_broken",
-			event_buff = true,
-			event = "on_damage_taken",
-			proc_chance = 0.5
-		}
-	}
-}]]
-BuffTemplates.bardin_ironbreaker_regen_stamina_on_gromril_removed = {
-	buffs = {
-		{
-			max_stacks = 1,
-			name = "bardin_ironbreaker_regen_stamina_on_gromril_removed",
-			buff_func = "bardin_ironbreaker_regen_stamina_on_gromril_lost",
-			event_buff = true,
-			event = "on_gromril_armour_removed",
-			proc_chance = 1
+			name = "bardin_ironbreaker_shield_breaking_above_half_stamina",
+			update_func = "update_bardin_ironbreaker_shield_breaking_above_half_stamina"
 		}
 	}
 }
-BuffTemplates.bardin_ironbreaker_attack_speed_on_shield_break = {
+BuffTemplates.bardin_ironbreaker_shield_breaking_above_half_stamina_buff = {
 	buffs = {
 		{
 			max_stacks = 1,
-			name = "bardin_ironbreaker_attack_speed_on_shield_break",
-			event_buff = true,
-			event = "on_shield_break",
+			name = "bardin_ironbreaker_shield_breaking_above_half_stamina_buff",
 			perk = "shield_break",
-			buff_func = "bardin_ironbreaker_attack_speed_on_shield_break"
-		}
-	}
-}
-BuffTemplates.bardin_ironbreaker_attack_speed_on_shield_break_buff = {
-	buffs = {
-		{
-			max_stacks = 1,
-			name = "bardin_ironbreaker_attack_speed_on_shield_break_buff",
-			stat_buff = "attack_speed",
-			multiplier = 0.75,
 			icon = "bardin_ironbreaker_regen_stamina_on_block_broken"
 		}
 	}
 }
-ProcFunctions.bardin_ironbreaker_attack_speed_on_shield_break = function (player, buff, params)
-	local player_unit = player.player_unit
-	if Unit.alive(player_unit) then
+BuffFunctionTemplates.functions.update_bardin_ironbreaker_shield_breaking_above_half_stamina = function (unit, buff, params)
+	if Unit.alive(unit) then
+		local status_extension = ScriptUnit.has_extension(unit, "status_system")
+		local max_fatigue_points = status_extension:get_max_fatigue_points()
+		local current_fatigue_points = status_extension:current_fatigue_points()
+		if status_extension and max_fatigue_points and current_fatigue_points then
+			if current_fatigue_points <= (max_fatigue_points / 2) then
 
-		buff_extension:add_buff("bardin_ironbreaker_attack_speed_on_shield_break_buff")
+				local buff_extension = ScriptUnit.extension(unit, "buff_system")
+				buff_extension:add_buff("bardin_ironbreaker_shield_breaking_above_half_stamina_buff")
+			elseif current_fatigue_points > (max_fatigue_points / 2) then
+
+				local buff_extension = ScriptUnit.extension(unit, "buff_system")
+				local has_buff = buff_extension:get_non_stacking_buff("bardin_ironbreaker_shield_breaking_above_half_stamina_buff")
+				if has_buff then
+
+					buff_extension:remove_buff(has_buff.id)
+				end
+			end
+		else 
+			local buff_extension = ScriptUnit.extension(unit, "buff_system")
+			local has_buff = buff_extension:get_non_stacking_buff("bardin_ironbreaker_shield_breaking_above_half_stamina_buff")
+			if has_buff then
+
+				buff_extension:remove_buff(has_buff.id)
+			end
+		end
 	end
 end
 --[SLAYER]:
@@ -3767,7 +3785,197 @@ BuffTemplates.kerillian_thorn_sister_passive_temp_health_funnel_aura.buffs[1].ra
 BuffTemplates.kerillian_thorn_sister_avatar_buff_1.deactivation_sound = nil
 BuffTemplates.kerillian_thorn_sister_avatar_buff_1.activation_sound = nil
 --SOTT CRIT FROM ULT
+Talents.wood_elf[68].buffs = {
+	"kerillian_thorn_sister_crit_on_any_ability",
+	"kerillian_thorn_sister_crit_on_any_ability_handler",
+	"kerillian_thorn_sister_crit_on_any_ability_team_buff",
+	"kerillian_thorn_sister_crit_on_any_ability_team_buff_2"
+}
+Talents.wood_elf[68].buffer = "both"
 BuffTemplates.kerillian_thorn_sister_crit_on_any_ability.buffs[1].amount_to_add = 2
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_buff.buffs[1].max_stacks = 20
+ProcFunctions.add_buff_reff_buff_stack = function (player, buff, params)
+		local player_unit = player.player_unit
+
+		if ALIVE[player_unit] then
+			local template = buff.template
+			local buff_name = template.buff_to_add
+			local amount_to_add = template.amount_to_add
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			local buff_stacks = buff_extension:num_buff_type("kerillian_thorn_sister_crit_on_any_ability_buff")
+
+			if template.reference_buff and ((buff_stacks + 2) <= 20) then
+				for i = 1, amount_to_add, 1 do
+					local reference_buff_name = template.reference_buff
+					local reference_buff = buff_extension:get_non_stacking_buff(reference_buff_name)
+
+					if not reference_buff.buff_list then
+						reference_buff.buff_list = {}
+					end
+
+					table.insert(reference_buff.buff_list, buff_extension:add_buff(buff_name))
+				end
+			elseif template.reference_buff and ((buff_stacks + 1) == 20) then
+				local reference_buff_name = template.reference_buff
+				local reference_buff = buff_extension:get_non_stacking_buff(reference_buff_name)
+
+				if not reference_buff.buff_list then
+					reference_buff.buff_list = {}
+				end
+				table.insert(reference_buff.buff_list, buff_extension:add_buff(buff_name))
+			end
+		end
+	end
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_team_buff = {
+	buffs = {
+		{
+			name = "kerillian_thorn_sister_crit_on_any_ability_team_buff",
+			event_buff = true,
+			max_stacks = 1,
+			amount_to_add = 2,
+			buff_to_add = "kerillian_thorn_sister_crit_on_any_ability_buff",
+			buff_to_add_1 = "kerillian_thorn_sister_crit_on_any_ability_handler",
+			buff_to_remove = "kerillian_thorn_sister_crit_on_any_ability_buff",
+			reference_buff = "kerillian_thorn_sister_crit_on_any_ability_handler",
+			range = 10,
+			event = "on_extra_ability_consumed",
+			buff_func = "kerillian_thorn_sister_crit_on_any_ability_team_buff"
+		}
+	}
+}
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_team_buff_2 = {
+	buffs = {
+		{
+			name = "kerillian_thorn_sister_crit_on_any_ability_team_buff_2",
+			event_buff = true,
+			max_stacks = 1,
+			amount_to_add = 2,
+			buff_to_add = "kerillian_thorn_sister_crit_on_any_ability_buff",
+			buff_to_add_1 = "kerillian_thorn_sister_crit_on_any_ability_handler",
+			buff_to_remove = "kerillian_thorn_sister_crit_on_any_ability_buff",
+			reference_buff = "kerillian_thorn_sister_crit_on_any_ability_handler",
+			range = 10,
+			event = "on_ability_cooldown_started",
+			buff_func = "kerillian_thorn_sister_crit_on_any_ability_team_buff"
+		}
+	}
+}
+ProcFunctions.kerillian_thorn_sister_crit_on_any_ability_team_buff = function (player, buff, params)
+	local player_unit = player.player_unit
+	if not Managers.state.network.is_server then
+		return
+	end
+	local player_buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+	local player_num_crits = player_buff_extension:num_buff_type("kerillian_thorn_sister_crit_on_any_ability_buff")
+
+	local buff_system = Managers.state.entity:system("buff_system")
+	local template = buff.template
+	local buff_to_add = template.buff_to_add
+	local buff_to_add_1 = template.buff_to_add_1
+	local amount_to_add = template.amount_to_add
+
+	local side = Managers.state.side.side_by_unit[player_unit]
+	local player_and_bot_units = side.PLAYER_AND_BOT_UNITS
+	local num_targets = #player_and_bot_units
+	local range = template.range
+
+	local owner_position = POSITION_LOOKUP[player_unit]
+	local range_squared = range * range
+
+	for i = 1, num_targets, 1 do
+		local target_unit = player_and_bot_units[i]
+		local ally_position = POSITION_LOOKUP[target_unit]
+		local distance_squared = Vector3.distance_squared(owner_position, ally_position)
+		local target_buff_extension = ScriptUnit.extension(target_unit, "buff_system")
+		local elf_check =  target_buff_extension:get_non_stacking_buff("kerillian_thorn_sister_crit_on_any_ability_team_buff")
+
+		if distance_squared < range_squared and not elf_check then
+			if Unit.alive(target_unit) then
+				local has_handler = target_buff_extension:get_non_stacking_buff("kerillian_thorn_sister_crit_on_any_ability_handler")
+				local num_crits = target_buff_extension:num_buff_type("kerillian_thorn_sister_crit_on_any_ability_buff")
+				local buff_name = template.buff_to_add
+
+				if template.reference_buff and ((num_crits + 2) <= 20) then
+					for i = 1, amount_to_add, 1 do
+						local reference_buff_name = template.reference_buff
+						if not has_handler then
+							buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
+							buff_system:add_buff(target_unit, buff_to_add_1, target_unit, false)
+							local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
+							if not reference_buff.buff_list then
+								reference_buff.buff_list = {}
+							end
+							table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
+							mod:echo("not has_handler - 2 stacks")
+						elseif has_handler then
+							buff_system:add_buff(unit, buff_to_add, unit, false)
+							local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
+							if not reference_buff.buff_list then
+								reference_buff.buff_list = {}
+							end
+							table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
+							mod:echo("has_handler - 2 stacks")
+						end
+					end
+					mod:echo("tried adding 2 crit stacks")
+				elseif template.reference_buff and ((num_crits + 1) == 20) then
+					local reference_buff_name = template.reference_buff
+					
+					if not has_handler then
+						buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
+						buff_system:add_buff(target_unit, buff_to_add_1, target_unit, false)
+						local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
+						if not reference_buff.buff_list then
+							reference_buff.buff_list = {}
+						end
+						table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
+						mod:echo("not has_handler - 1 stacks")
+					elseif has_handler then
+						buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
+						local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
+						if not reference_buff.buff_list then
+							reference_buff.buff_list = {}
+						end
+						table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
+						mod:echo("has_handler - 1 stacks")
+					end
+					mod:echo("tried adding 1 crit stack")
+				end
+			end
+		end
+	end
+	--[[if template.reference_buff and ((player_num_crits + 2) <= 20) then
+		if ALIVE[player_unit] then
+			for i = 1, amount_to_add, 1 do
+				local buff_template = buff.template
+				local buff_name = buff_template.buff_to_remove
+				local player_buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+
+				if buff.buff_list then
+					local buff_id = table.remove(buff.buff_list)
+
+					buff_extension:remove_buff(buff_id)
+				end
+			end
+			mod:echo("removed extra crits - 2")
+		end
+	elseif template.reference_buff and ((player_num_crits + 1) == 20) then
+		if ALIVE[player_unit] then
+			local buff_template = buff.template
+				local buff_name = buff_template.buff_to_remove
+				local player_buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+
+				if buff.buff_list then
+					local buff_id = table.remove(buff.buff_list)
+
+					buff_extension:remove_buff(buff_id)
+				end
+			end
+			mod:echo("removed extra crits - 1")
+		end
+	end]]
+end
+
 --[SHADE]:
 --[VANISH]:
 --[CLOAK OF MIST]
