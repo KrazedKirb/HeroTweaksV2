@@ -298,12 +298,12 @@ ProcFunctions.heal_finesse_damage_on_melee = function (player, buff, params)
 	local player_unit = player.player_unit
 	local heal_amount_light = 2.5 
 	local heal_amount_light_dual = 1.25
-	local heal_amount_heavy = 5
-	local heal_amount_heavy_dual =  2.5
+	local heal_amount_heavy = 4 --5
+	local heal_amount_heavy_dual =  2 --2.5
 	local heal_amount_crit_light = 1.5
 	local heal_amount_crit_light_dual = 0.75
-	local heal_amount_crit_heavy = 3
-	local heal_amount_crit_heavy_dual = 1.5
+	local heal_amount_crit_heavy = 2.4 --3
+	local heal_amount_crit_heavy_dual = 1.2 --1.5
 	local max_targets = 3 
 
 	local hit_unit = params[1]
@@ -356,8 +356,8 @@ ProcFunctions.heal_finesse_damage_on_melee = function (player, buff, params)
 		end
 
 		if target_number == 2 then
-			local heal_cleave_headshot = 2
-			local heal_cleave_crit = 1
+			local heal_cleave_headshot = 1.5 --2
+			local heal_cleave_crit = 0.75 --1
 
 			if (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
 
@@ -372,8 +372,8 @@ ProcFunctions.heal_finesse_damage_on_melee = function (player, buff, params)
 			end
 		end
 		if target_number == 3 then
-			local heal_cleave_headshot = 1
-			local heal_cleave_crit = 0.5
+			local heal_cleave_headshot = 0.75 --1
+			local heal_cleave_crit = 0.375 --0.5
 
 			if (hit_zone_name == "head" or hit_zone_name == "neck" or hit_zone_name == "weakspot") then
 
@@ -404,7 +404,8 @@ Weapons.dual_wield_hammers_template.dual_wield_attack = true
 Weapons.dual_wield_sword_dagger_template_1.dual_wield_attack = true
 --dual swords
 Weapons.dual_wield_swords_template_1.dual_wield_attack = true
---[UNINTERRUPTIBLE REVIVES]:
+--[CAREER SYSTEM]:
+
 -------------------------------------------------------
 --					//////[KRUBER]\\\\\\
 -------------------------------------------------------
@@ -1572,7 +1573,6 @@ ActionBountyHunterHandgun._shotgun_shoot = function (self)
 	end
 end
 --experimental
-
 --[ZEALOT]:
 
 TalentTrees.witch_hunter[1] = {
@@ -1799,7 +1799,6 @@ BuffTemplates.victor_zealot_activated_ability_power_on_hit_buff.buffs[1].duratio
 -------------------------------------------------------
 --[RANGER VETERAN]:
 --[FOE FELLER]
---"When a teammate or Bardin picks up Survivalist Ammunition Bardin receives 2.5 percent attack speed and damage to the first enemy hit by a melee attack for 30 seconds. Stacks 4 times."
 Talents.dwarf_ranger[43].buffer = "both"
 Talents.dwarf_ranger[43].buffs = {
 	"bardin_ranger_passive_attack_speed_on_ally_ammo_pickup",
@@ -2495,6 +2494,7 @@ ProcFunctions.on_critical_strike_debuff_enemy_defence = function (player, buff, 
 BuffTemplates.on_critical_strike_debuff_enemy_defence = {
 		buffs = {
 			{
+				name = "on_critical_strike_debuff_enemy_defence",
 				stat_buff = "damage_taken",
 				multiplier = 0.1,
 				duration = 10,
@@ -2611,29 +2611,7 @@ CareerAbilityDRSlayer._do_common_stuff = function (self)
 	if talent_extension:has_talent("bardin_slayer_activated_ability_movement") then
 		buffs[#buffs + 1] = "bardin_slayer_activated_ability_movement"
 	end
-	if talent_extension:has_talent("bardin_slayer_activated_ability_leap_damage") then
-		if local_player or (is_server and bot_player) then
-			local buff_extension = self._buff_extension
 
-			if buff_extension then
-				local buff = buff_extension:get_buff_type("bardin_slayer_ability_leap_double")
-
-				if buff then
-					buff.aborted = true
-
-					buff_extension:remove_buff(buff.id)
-					--career_extension:reduce_activated_ability_cooldown_percent(-1)
-					career_extension:start_activated_ability_cooldown()
-					career_extension:set_abilities_always_usable(false, "bardin_slayer_activated_ability_leap_damage")
-				else
-					buff_extension:add_buff("bardin_slayer_ability_leap_double")
-					career_extension:set_abilities_always_usable(true, "bardin_slayer_activated_ability_leap_damage")
-				end
-			end
-		end
-	else
-		career_extension:start_activated_ability_cooldown()
-	end
 	local unit_object_id = network_manager:unit_game_object_id(owner_unit)
 
 	if is_server then
@@ -2671,7 +2649,32 @@ CareerAbilityDRSlayer._do_common_stuff = function (self)
 		end
 	end
 
-	career_extension:start_activated_ability_cooldown()
+	if talent_extension:has_talent("bardin_slayer_activated_ability_leap_damage") then
+		if local_player or (is_server and bot_player) then
+			local buff_extension = self._buff_extension
+
+			if buff_extension then
+				local buff = buff_extension:get_buff_type("bardin_slayer_ability_leap_double")
+
+				if buff then
+					buff.aborted = true
+
+					buff_extension:remove_buff(buff.id)
+					career_extension:start_activated_ability_cooldown()
+					--career_extension:set_abilities_always_usable(false, "bardin_slayer_activated_ability_leap_damage")
+					career_extension:set_abilities_always_usable(false, "bardin_slayer_ability_leap_double")
+				else
+					buff_extension:add_buff("bardin_slayer_ability_leap_double")
+					--career_extension:set_abilities_always_usable(true, "bardin_slayer_activated_ability_leap_damage")
+					career_extension:set_abilities_always_usable(false, "bardin_slayer_ability_leap_double")
+				end
+			end
+		end
+	else
+		career_extension:start_activated_ability_cooldown()
+	end
+
+	--career_extension:start_activated_ability_cooldown()
 	self:_play_vo()
 end
 BuffFunctionTemplates.functions.bardin_slayer_double_leap_talent_start_ability_cooldown = function (unit, buff, params)
@@ -3770,8 +3773,6 @@ ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.att
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.alert_enemies_radius = 20
 ExplosionTemplates.explosion_bw_unchained_ability_increased_radius.explosion.damage_profile = "unchained_ability_blazing_crescendo"
 ExplosionTemplates.explosion_bw_unchained_ability.explosion.no_friendly_fire = true
-
-
 -------------------------------------------------------
 --					//////[KERILLIAN]\\\\\\
 -------------------------------------------------------
@@ -3784,16 +3785,127 @@ BuffTemplates.kerillian_thorn_sister_passive_temp_health_funnel_aura.buffs[1].ra
 --[INHERITANCE FX ADJUSTMENTS]:
 BuffTemplates.kerillian_thorn_sister_avatar_buff_1.deactivation_sound = nil
 BuffTemplates.kerillian_thorn_sister_avatar_buff_1.activation_sound = nil
+--SURGE OF MALICE
+BuffFunctionTemplates.functions.update_server_buff_on_health_percent = function (owner_unit, buff, params)
+		if not Managers.state.network.is_server then
+			return
+		end
+
+		if ALIVE[owner_unit] then
+			local health_extension = ScriptUnit.has_extension(owner_unit, "health_system")
+
+			if health_extension then
+				local max_health = health_extension:get_max_health()
+				local health_threshold = buff.template.threshold
+				local current_health = health_extension:current_health()
+				local buff_to_add = buff.template.buff_to_add
+				
+				local health_threshold1 = 0
+				local health_threshold2 = 0.5
+				local health_threshold3 = 0.8
+				local health_threshold4 = 1
+
+				if current_health > max_health * health_threshold1 and not buff.has_buff1 then
+					local buff_system = Managers.state.entity:system("buff_system")
+					buff.has_buff1 = buff_system:add_buff(owner_unit, buff_to_add, owner_unit, true)
+				elseif current_health <= max_health * health_threshold1 and buff.has_buff1 then
+					local buff_system = Managers.state.entity:system("buff_system")
+
+					buff_system:remove_server_controlled_buff(owner_unit, buff.has_buff1)
+
+					buff.has_buff1 = nil
+				end
+
+				if current_health >= max_health * health_threshold2 and not buff.has_buff2 then
+					local buff_system = Managers.state.entity:system("buff_system")
+					buff.has_buff2 = buff_system:add_buff(owner_unit, buff_to_add, owner_unit, true)
+				elseif current_health < max_health * health_threshold2 and buff.has_buff2 then
+					local buff_system = Managers.state.entity:system("buff_system")
+
+					buff_system:remove_server_controlled_buff(owner_unit, buff.has_buff2)
+
+					buff.has_buff2 = nil
+				end
+
+				if current_health >= max_health * health_threshold3 and not buff.has_buff3 then
+					local buff_system = Managers.state.entity:system("buff_system")
+					buff.has_buff3 = buff_system:add_buff(owner_unit, buff_to_add, owner_unit, true)
+				elseif current_health < max_health * health_threshold3 and buff.has_buff3 then
+					local buff_system = Managers.state.entity:system("buff_system")
+
+					buff_system:remove_server_controlled_buff(owner_unit, buff.has_buff3)
+
+					buff.has_buff3 = nil
+				end
+
+				if current_health >= max_health * health_threshold4 and not buff.has_buff4 then
+					local buff_system = Managers.state.entity:system("buff_system")
+					buff.has_buff4 = buff_system:add_buff(owner_unit, buff_to_add, owner_unit, true)
+				elseif current_health < max_health * health_threshold4 and buff.has_buff4 then
+					local buff_system = Managers.state.entity:system("buff_system")
+
+					buff_system:remove_server_controlled_buff(owner_unit, buff.has_buff4)
+
+					buff.has_buff4 = nil
+				end
+			end
+		end
+	end
+BuffTemplates.kerillian_thorn_sister_attack_speed_on_full_buff.buffs[1].max_stacks = 4
+BuffTemplates.kerillian_thorn_sister_attack_speed_on_full_buff.buffs[1].multiplier = 0.05
+		
+--ISHA'S BOUNTY
+--[[BuffTemplates.kerillian_power_on_health_gain.buffs[1].melee_buff_to_add = "kerillian_melee_power_on_health_gain_buff"
+BuffTemplates.kerillian_power_on_health_gain.buffs[1].ranged_buff_to_add = "kerillian_ranged_power_on_health_gain_buff"
+ProcFunctions.add_buff_on_proc_thorn = function (player, buff, params)
+		local player_unit = player.player_unit
+		local heal_type = params[3]
+
+		if ALIVE[player_unit] then
+			local buff_system = Managers.state.entity:system("buff_system")
+			local melee_buff_to_add = buff.template.melee_buff_to_add
+			local ranged_buff_to_add = buff.template.ranged_buff_to_add
+			if (heal_type == "healing_draught" or heal_type == "bandage" or heal_type == "bandage_trinket" or heal_type == "buff_shared_medpack" or heal_type == "career_passive" or heal_type == "health_regen" or heal_type == "debug" or heal_type == "health_conversion" or heal_type == "career_skill") then
+
+				buff_system:add_buff(player_unit, ranged_buff_to_add, player_unit, false)
+				buff_system:add_buff(player_unit, melee_buff_to_add, player_unit, false)
+			else
+				buff_system:add_buff(player_unit, melee_buff_to_add, player_unit, false)
+			end
+		end
+	end
+BuffTemplates.kerillian_melee_power_on_health_gain_buff = {
+		buffs = {
+			{
+				name = "kerillian_melee_power_on_health_gain_buff",
+				refresh_durations = true,
+				icon = "kerillian_thornsister_regrowth",
+				stat_buff = "power_level_melee",
+				max_stacks = 3,
+				multiplier = 0.05,
+				duration = 8
+			}
+		}
+	}
+BuffTemplates.kerillian_ranged_power_on_health_gain_buff = {
+		buffs = {
+			{
+				name = "kerillian_ranged_power_on_health_gain_buff",
+				refresh_durations = true,
+				icon = "kerillian_thornsister_power_on_health_gain",
+				stat_buff = "power_level_ranged",
+				max_stacks = 3,
+				multiplier = 0.05,
+				duration = 8
+			}
+		}
+	}]]
 --SOTT CRIT FROM ULT
-Talents.wood_elf[68].buffs = {
-	"kerillian_thorn_sister_crit_on_any_ability",
-	"kerillian_thorn_sister_crit_on_any_ability_handler",
-	"kerillian_thorn_sister_crit_on_any_ability_team_buff",
-	"kerillian_thorn_sister_crit_on_any_ability_team_buff_2"
-}
-Talents.wood_elf[68].buffer = "both"
-BuffTemplates.kerillian_thorn_sister_crit_on_any_ability.buffs[1].amount_to_add = 2
-BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_buff.buffs[1].max_stacks = 20
+--Talents.wood_elf[68].buffer = "both"
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability.buffs[1].buff_func = "kerillian_thorn_sister_crit_on_any_ability_team_buff"
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability.buffs[1].buff_to_add = "kerillian_thorn_sister_crit_on_any_ability_team"
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability.buffs[1].handler_to_add = "kerillian_thorn_sister_crit_on_any_ability_team_handler"
+
 ProcFunctions.add_buff_reff_buff_stack = function (player, buff, params)
 		local player_unit = player.player_unit
 
@@ -3826,156 +3938,273 @@ ProcFunctions.add_buff_reff_buff_stack = function (player, buff, params)
 			end
 		end
 	end
-BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_team_buff = {
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_team = {
 	buffs = {
 		{
-			name = "kerillian_thorn_sister_crit_on_any_ability_team_buff",
-			event_buff = true,
-			max_stacks = 1,
-			amount_to_add = 2,
-			buff_to_add = "kerillian_thorn_sister_crit_on_any_ability_buff",
-			buff_to_add_1 = "kerillian_thorn_sister_crit_on_any_ability_handler",
-			buff_to_remove = "kerillian_thorn_sister_crit_on_any_ability_buff",
-			reference_buff = "kerillian_thorn_sister_crit_on_any_ability_handler",
-			range = 10,
-			event = "on_extra_ability_consumed",
-			buff_func = "kerillian_thorn_sister_crit_on_any_ability_team_buff"
+			name = "kerillian_thorn_sister_crit_on_any_ability_team",
+			icon = "kerillian_thornsister_crit_on_any_ability",
+			perk = "guaranteed_crit",
+			max_stacks = 10
 		}
 	}
 }
-BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_team_buff_2 = {
+BuffTemplates.kerillian_thorn_sister_crit_on_any_ability_team_handler = {
 	buffs = {
 		{
-			name = "kerillian_thorn_sister_crit_on_any_ability_team_buff_2",
+			event = "on_critical_action",
+			name = "kerillian_thorn_sister_crit_on_any_ability_team_handler",
 			event_buff = true,
 			max_stacks = 1,
-			amount_to_add = 2,
-			buff_to_add = "kerillian_thorn_sister_crit_on_any_ability_buff",
-			buff_to_add_1 = "kerillian_thorn_sister_crit_on_any_ability_handler",
-			buff_to_remove = "kerillian_thorn_sister_crit_on_any_ability_buff",
-			reference_buff = "kerillian_thorn_sister_crit_on_any_ability_handler",
-			range = 10,
-			event = "on_ability_cooldown_started",
-			buff_func = "kerillian_thorn_sister_crit_on_any_ability_team_buff"
+			buff_func = "remove_buff_stack",
+			remove_buff_stack_data = {
+				{
+					buff_to_remove = "kerillian_thorn_sister_crit_on_any_ability_team",
+					num_stacks = 1
+				}
+			}
 		}
 	}
 }
 ProcFunctions.kerillian_thorn_sister_crit_on_any_ability_team_buff = function (player, buff, params)
 	local player_unit = player.player_unit
-	if not Managers.state.network.is_server then
-		return
+	local function is_server()
+		return Managers.player.is_server
 	end
-	local player_buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-	local player_num_crits = player_buff_extension:num_buff_type("kerillian_thorn_sister_crit_on_any_ability_buff")
 
 	local buff_system = Managers.state.entity:system("buff_system")
 	local template = buff.template
 	local buff_to_add = template.buff_to_add
-	local buff_to_add_1 = template.buff_to_add_1
-	local amount_to_add = template.amount_to_add
+	local handler_to_add = template.handler_to_add
 
 	local side = Managers.state.side.side_by_unit[player_unit]
 	local player_and_bot_units = side.PLAYER_AND_BOT_UNITS
 	local num_targets = #player_and_bot_units
-	local range = template.range
+	local range = 40
 
 	local owner_position = POSITION_LOOKUP[player_unit]
 	local range_squared = range * range
+
+	local network_manager = Managers.state.network
+	local network_transmit = network_manager.network_transmit
+	local unit_object_id = network_manager:unit_game_object_id(player_unit)
 
 	for i = 1, num_targets, 1 do
 		local target_unit = player_and_bot_units[i]
 		local ally_position = POSITION_LOOKUP[target_unit]
 		local distance_squared = Vector3.distance_squared(owner_position, ally_position)
 		local target_buff_extension = ScriptUnit.extension(target_unit, "buff_system")
-		local elf_check =  target_buff_extension:get_non_stacking_buff("kerillian_thorn_sister_crit_on_any_ability_team_buff")
 
-		if distance_squared < range_squared and not elf_check then
+		if distance_squared < range_squared then
+
 			if Unit.alive(target_unit) then
-				local has_handler = target_buff_extension:get_non_stacking_buff("kerillian_thorn_sister_crit_on_any_ability_handler")
-				local num_crits = target_buff_extension:num_buff_type("kerillian_thorn_sister_crit_on_any_ability_buff")
-				local buff_name = template.buff_to_add
+				local target_unit_object_id = network_manager:unit_game_object_id(target_unit)
+				local target_buff_extension = ScriptUnit.extension(target_unit, "buff_system")
+				local buff_template_name_id = NetworkLookup.buff_templates[buff_to_add]
+				local handler_template_name_id = NetworkLookup.buff_templates[handler_to_add]
 
-				if template.reference_buff and ((num_crits + 2) <= 20) then
-					for i = 1, amount_to_add, 1 do
-						local reference_buff_name = template.reference_buff
-						if not has_handler then
-							buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
-							buff_system:add_buff(target_unit, buff_to_add_1, target_unit, false)
-							local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
-							if not reference_buff.buff_list then
-								reference_buff.buff_list = {}
-							end
-							table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
-							mod:echo("not has_handler - 2 stacks")
-						elseif has_handler then
-							buff_system:add_buff(unit, buff_to_add, unit, false)
-							local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
-							if not reference_buff.buff_list then
-								reference_buff.buff_list = {}
-							end
-							table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
-							mod:echo("has_handler - 2 stacks")
-						end
-					end
-					mod:echo("tried adding 2 crit stacks")
-				elseif template.reference_buff and ((num_crits + 1) == 20) then
-					local reference_buff_name = template.reference_buff
-					
-					if not has_handler then
-						buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
-						buff_system:add_buff(target_unit, buff_to_add_1, target_unit, false)
-						local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
-						if not reference_buff.buff_list then
-							reference_buff.buff_list = {}
-						end
-						table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
-						mod:echo("not has_handler - 1 stacks")
-					elseif has_handler then
-						buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
-						local reference_buff = target_buff_extension:get_non_stacking_buff(reference_buff_name)
-						if not reference_buff.buff_list then
-							reference_buff.buff_list = {}
-						end
-						table.insert(reference_buff.buff_list, target_buff_extension:add_buff(buff_name))
-						mod:echo("has_handler - 1 stacks")
-					end
-					mod:echo("tried adding 1 crit stack")
+				if is_server() then
+					target_buff_extension:add_buff(handler_to_add)
+					network_transmit:send_rpc_clients("rpc_add_buff", target_unit_object_id, handler_template_name_id, unit_object_id, 0, false)
+				else
+					network_transmit:send_rpc_server("rpc_add_buff", target_unit_object_id, handler_template_name_id, unit_object_id, 0, true)
+				end
+
+				if is_server() then
+					target_buff_extension:add_buff(buff_to_add)
+					network_transmit:send_rpc_clients("rpc_add_buff", target_unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+				else
+					network_transmit:send_rpc_server("rpc_add_buff", target_unit_object_id, buff_template_name_id, unit_object_id, 0, true)
 				end
 			end
 		end
 	end
-	--[[if template.reference_buff and ((player_num_crits + 2) <= 20) then
-		if ALIVE[player_unit] then
-			for i = 1, amount_to_add, 1 do
-				local buff_template = buff.template
-				local buff_name = buff_template.buff_to_remove
-				local player_buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-
-				if buff.buff_list then
-					local buff_id = table.remove(buff.buff_list)
-
-					buff_extension:remove_buff(buff_id)
-				end
-			end
-			mod:echo("removed extra crits - 2")
-		end
-	elseif template.reference_buff and ((player_num_crits + 1) == 20) then
-		if ALIVE[player_unit] then
-			local buff_template = buff.template
-				local buff_name = buff_template.buff_to_remove
-				local player_buff_extension = ScriptUnit.extension(player_unit, "buff_system")
-
-				if buff.buff_list then
-					local buff_id = table.remove(buff.buff_list)
-
-					buff_extension:remove_buff(buff_id)
-				end
-			end
-			mod:echo("removed extra crits - 1")
-		end
-	end]]
 end
+--REPEL
+Talents.wood_elf[69].buffer = "both"
+Talents.wood_elf[69].buffs = {
+	"kerillian_thorn_sister_big_push",
+	"kerillian_thorn_sister_big_push_debuff"
+}
+BuffTemplates.kerillian_thorn_sister_big_push_debuff = {
+	buffs = {
+		{
+			name = "kerillian_thorn_sister_big_push_debuff",
+			max_stacks = 1,
+			event_buff = true,
+			buff_to_add = "kerillian_thorn_sister_big_push_debuff_buff",
+			event = "on_push",
+			buff_func = "apply_kerillian_thorn_sister_big_push_debuff"
+		}
+	}
+}
+BuffTemplates.kerillian_thorn_sister_big_push_debuff_buff = {
+	buffs = {
+		{
+			name = "kerillian_thorn_sister_big_push_debuff_buff",
+			stat_buff = "damage_taken",
+			multiplier = 0.1,
+			duration = 10,
+			refresh_durations = true,
+			max_stacks = 1
+		}
+	}
+}
+ProcFunctions.apply_kerillian_thorn_sister_big_push_debuff = function (player, buff, params)
+	local player_unit = player.player_unit
+	local function is_server()
+		return Managers.player.is_server
+	end
+	local template = buff.template
+	local buff_to_add = template.buff_to_add
+	local attack_type = params[2]
+	local network_manager = Managers.state.network
+	local network_transmit = network_manager.network_transmit
+	local unit_object_id = network_manager:unit_game_object_id(player_unit)
 
+	if Unit.alive(player_unit) then
+		local hit_unit = params[1]
+		local target_buff_extension = ScriptUnit.extension(hit_unit, "buff_system")
+		if hit_unit and Unit.alive(hit_unit) and target_buff_extension then
+			local hit_unit_object_id = network_manager:unit_game_object_id(hit_unit)
+			local hit_unit_buff_extension = ScriptUnit.extension(hit_unit, "buff_system")
+			local buff_template_name_id = NetworkLookup.buff_templates[buff_to_add]
+			if is_server() then
+				hit_unit_buff_extension:add_buff(buff_to_add)
+				network_transmit:send_rpc_clients("rpc_add_buff", hit_unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+			else
+				network_transmit:send_rpc_server("rpc_add_buff", hit_unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+			end
+		end
+	end
+end
+--The Pale Queen's Choosing
+BuffTemplates.kerillian_thorn_sister_free_throw_buff_heal.buffs[1].buff_func = "kerillian_thorn_sister_team_heal_on_free_throw_hit"
+BuffTemplates.kerillian_thorn_sister_free_throw_buff_heal.buffs[1].buff_to_add = "kerillian_thorn_sister_team_heal_buff"
+BuffTemplates.kerillian_thorn_sister_free_throw_buff_heal.buffs[1].self_buff_to_add = "kerillian_thorn_sister_self_heal_buff"
+BuffTemplates.kerillian_thorn_sister_free_throw_buff_heal.buffs[1].range = 15
+BuffTemplates.kerillian_thorn_sister_team_heal_buff = {
+	buffs = {
+		{
+			name = "kerillian_thorn_sister_team_heal_buff",
+			time_between_heals = 1,
+			heal_amount = 1,
+			duration = 5,
+			icon = "kerillian_thornsister_free_throw",
+			max_stacks = 1,
+			refresh_durations = true,
+			update_func = "kerillian_thorn_sister_team_heal"
+		}
+	}
+}
+BuffTemplates.kerillian_thorn_sister_self_heal_buff = {
+	buffs = {
+		{
+			name = "kerillian_thorn_sister_self_heal_buff",
+			time_between_heals = 1,
+			heal_amount = 0.5,
+			duration = 5,
+			icon = "kerillian_thornsister_free_throw",
+			max_stacks = 1,
+			refresh_durations = true,
+			update_func = "kerillian_thorn_sister_self_heal"
+		}
+	}
+}
+BuffFunctionTemplates.functions.kerillian_thorn_sister_self_heal = function (unit, buff, params)
+	local t = params.t
+	local buff_template = buff.template
+	local next_heal_tick = buff.next_heal_tick or 0
+
+	if t > next_heal_tick and ALIVE[unit] then
+		local talent_extension = ScriptUnit.has_extension(unit, "talent_system")
+
+		if talent_extension and Managers.state.network.is_server then
+			local health_extension = ScriptUnit.has_extension(unit, "health_system")
+			local status_extension = ScriptUnit.has_extension(unit, "status_system")
+
+			if not health_extension or not status_extension then
+				return
+			end
+
+			local heal_amount = buff_template.heal_amount
+
+			if health_extension:is_alive() and not status_extension:is_knocked_down() and not status_extension:is_assisted_respawning() then
+				DamageUtils.heal_network(unit, unit, heal_amount, "career_passive")
+			end
+		end
+
+		buff.next_heal_tick = t + buff_template.time_between_heals
+	end
+end
+BuffFunctionTemplates.functions.kerillian_thorn_sister_team_heal = function (unit, buff, params)
+	local t = params.t
+	local buff_template = buff.template
+	local next_heal_tick = buff.next_heal_tick or 0
+
+	if t > next_heal_tick and ALIVE[unit] then
+		local talent_extension = ScriptUnit.has_extension(unit, "talent_system")
+
+		if talent_extension and Managers.state.network.is_server then
+			local health_extension = ScriptUnit.has_extension(unit, "health_system")
+			local status_extension = ScriptUnit.has_extension(unit, "status_system")
+
+			if not health_extension or not status_extension then
+				return
+			end
+
+			local heal_amount = buff_template.heal_amount
+
+			if health_extension:is_alive() and not status_extension:is_knocked_down() and not status_extension:is_assisted_respawning() then
+				DamageUtils.heal_network(unit, unit, heal_amount, "heal_from_proc")
+			end
+		end
+
+		buff.next_heal_tick = t + buff_template.time_between_heals
+	end
+end	
+ProcFunctions.kerillian_thorn_sister_team_heal_on_free_throw_hit = function (player, buff, params)
+	local player_unit = player.player_unit
+	local attack_type = params[7]
+
+	local buff_system = Managers.state.entity:system("buff_system")
+	local template = buff.template
+	local buff_to_add = template.buff_to_add
+	local self_buff_to_add = template.self_buff_to_add
+
+	local side = Managers.state.side.side_by_unit[player_unit]
+	local player_and_bot_units = side.PLAYER_AND_BOT_UNITS
+	local num_targets = #player_and_bot_units
+	local range = template.range
+	
+
+	local owner_position = POSITION_LOOKUP[player_unit]
+	local range_squared = range * range
+
+	if ALIVE[player_unit] and attack_type and (attack_type == "projectile" or attack_type == "instant_projectile") then
+		
+		
+		
+		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+		--buff_extension:add_buff(self_buff_to_add)
+
+		buff_extension:remove_buff(buff.id)
+
+		for i = 1, num_targets, 1 do
+			local target_unit = player_and_bot_units[i]
+			local ally_position = POSITION_LOOKUP[target_unit]
+			local distance_squared = Vector3.distance_squared(owner_position, ally_position)
+			local target_buff_extension = ScriptUnit.extension(target_unit, "buff_system")
+			local elf_check = target_buff_extension:get_buff_type("kerillian_thorn_sister_free_throw_handler")
+
+			if distance_squared < range_squared then
+				if Unit.alive(target_unit) then
+
+					buff_system:add_buff(target_unit, buff_to_add, target_unit, false)
+				end
+			end
+		end
+	end
+end			
 --[SHADE]:
 --[VANISH]:
 --[CLOAK OF MIST]
@@ -4175,7 +4404,7 @@ mod:hook(_G, "Localize", function(func, key, ...)
     return "Master of the Skirmish"
   end
   if key == "markus_huntsman_movement_speed_desc" then
-    return "Ranged headshots increase movement speed by 15 percent for 3 seconds. Close quarters ranged attacks have improved armour penetration."
+    return "Ranged headshots increase movement speed by 15 percent for 3 seconds. Close quarters ranged attacks deal more damage to armoured targets."
   end
   if key == "markus_huntsman_movement_speed_desc_2" then
     return "Killing a Special or Elite enemy reduces damage taken by 10 percent and increases attack speed by 2.5 percent. Stacks 4 times. Taking a hit removes one stack."
