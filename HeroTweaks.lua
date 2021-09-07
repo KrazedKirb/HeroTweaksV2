@@ -881,6 +881,27 @@ BuffTemplates.victor_witchhunter_guaranteed_crit_on_timed_block_parry_buff = {
 		}
 	}
 }
+BuffTemplates.victor_witchhunter_guaranteed_crit_on_timed_block_buff_timer = {
+	buffs = {
+		{
+			name = "victor_witchhunter_guaranteed_crit_on_timed_block_buff_timer",
+			max_stacks = 1,
+			duration = 0.2
+		}
+	}
+}
+BuffTemplates.victor_witchhunter_guaranteed_crit_on_timed_block_buff.buffs[1].buff_func = "add_riposte_timer"
+ProcFunctions.add_riposte_timer = function (player, buff, params)
+	local player_unit = player.player_unit
+	local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+	local riposte_buff = "victor_witchhunter_guaranteed_crit_on_timed_block_buff"
+	if Unit.alive(player_unit) then
+		buff_extension:add_buff("victor_witchhunter_guaranteed_crit_on_timed_block_buff_timer")
+		--mod:echo("adding timer")
+		--mod:echo("removing riposte buff")
+		buff_extension:remove_buff(buff.id)
+	end
+end
 --[TEMPLAR'S KNOWLEDGE]:
 BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].max_stacks = 4
 BuffTemplates.victor_witchhunter_improved_damage_taken_ping.buffs[1].duration = 15
@@ -925,8 +946,9 @@ ProcFunctions.victor_witchhunter_killing_shot_rework = function (player, buff, p
 	local hit_zone_name = params[4]
 	local attack_type = params[7]
 	local is_dummy = unit_get_data(hit_unit, "is_dummy")
+	local riposte_buff = buff_extension:get_buff_type("victor_witchhunter_guaranteed_crit_on_timed_block_buff_timer")
 
-	if is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and (attack_type == "heavy_attack" or attack_type == "projectile" or attack_type == "instant_projectile") and not buff_extension:has_buff_type("victor_witchhunter_guaranteed_crit_on_timed_block_buff") then
+	if is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and (attack_type == "heavy_attack" or attack_type == "projectile" or attack_type == "instant_projectile") and not riposte_buff then
 		local enemy_health_extension = ScriptUnit.extension(hit_unit, "health_system")
 		local breed = Unit.get_data(hit_unit, "breed")
 		local boss = breed and breed.boss
@@ -935,11 +957,11 @@ ProcFunctions.victor_witchhunter_killing_shot_rework = function (player, buff, p
 
 		if not boss and not primary_armor and not is_dummy then
 			modifables_params.damage_amount = target_health
-			mod:echo("heavy insta kill")
+			--mod:echo("heavy insta kill")
 		else
-			mod:echo("cant insta kill boss/primary armor/dummy")
+			--mod:echo("cant insta kill boss/primary armor/dummy")
 		end
-	elseif is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and attack_type == "light_attack" and not buff_extension:has_buff_type("victor_witchhunter_guaranteed_crit_on_timed_block_buff") then
+	elseif is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and attack_type == "light_attack" and not riposte_buff then
 		local enemy_health_extension = ScriptUnit.extension(hit_unit, "health_system")
 		local buff_template = buff.template
 		local breed = Unit.get_data(hit_unit, "breed")
@@ -955,12 +977,12 @@ ProcFunctions.victor_witchhunter_killing_shot_rework = function (player, buff, p
 		if target_health <= modified_damage_check then
 			if not boss and not primary_armor and not is_dummy then
 				modifables_params.damage_amount = target_health
-				mod:echo("light insta kill")
+				--mod:echo("light insta kill")
 			end
 		else
-			mod:echo("dmg not high enough to instakill or boss/primary armor/dummy")
+			--mod:echo("dmg not high enough to instakill or boss/primary armor/dummy")
 		end
-	elseif is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and buff_extension:has_buff_type("victor_witchhunter_guaranteed_crit_on_timed_block_buff") then
+	elseif is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and riposte_buff then
 		local enemy_health_extension = ScriptUnit.extension(hit_unit, "health_system")
 		local breed = Unit.get_data(hit_unit, "breed")
 		local boss = breed and breed.boss
@@ -969,9 +991,9 @@ ProcFunctions.victor_witchhunter_killing_shot_rework = function (player, buff, p
 
 		if not boss and not primary_armor and not is_dummy then
 			modifables_params.damage_amount = target_health
-			mod:echo("riposte insta kill")
+			--mod:echo("riposte insta kill")
 		else
-			mod:echo("cant insta kill boss/primary armor/dummy")
+			--mod:echo("cant insta kill boss/primary armor/dummy")
 		end
 	end
 end
@@ -1039,7 +1061,7 @@ BuffFunctionTemplates.functions.victor_witchhunter_ability_debuff_aura_update = 
 					local buff_system = Managers.state.entity:system("buff_system")
 
 					buff_system:add_buff(enemy_unit, "defence_debuff_enemies", unit --[[, unit, false, 200, unit]])
-					mod:echo("WHC tag debuff")
+					--mod:echo("WHC tag debuff")
 				end
 				if talent_extension:has_talent("victor_witchhunter_improved_damage_taken_ping") then
 					if AiUtils.unit_alive(enemy_unit) then
@@ -1048,7 +1070,7 @@ BuffFunctionTemplates.functions.victor_witchhunter_ability_debuff_aura_update = 
 								local buff_system = Managers.state.entity:system("buff_system")
 
 								buff_system:add_buff(enemy_unit, "victor_witchhunter_improved_damage_taken_ping", unit --[[, unit, false, 200, unit]])
-								mod:echo("WHC Improved tag debuff")
+								--mod:echo("WHC Improved tag debuff")
 							end
 						end
 					end
@@ -3285,7 +3307,122 @@ DamageProfileTemplates.engineer_ability_shot_armor_pierce.armor_modifier_far.att
 Weapons.bardin_engineer_career_skill_weapon_special.default_spread_template = "repeating_handgun"
 Weapons.bardin_engineer_career_skill_weapon_special.actions.action_one.armor_pierce_fire.range = 100
 --[Bombardier gives bombs at start]:
-SimpleInventoryExtension.extensions_ready = function(self, world, unit)
+SimpleInventoryExtension.extensions_ready = function (self, world, unit)
+	local first_person_extension = ScriptUnit.extension(unit, "first_person_system")
+	self.first_person_extension = first_person_extension
+	self._first_person_unit = first_person_extension:get_first_person_unit()
+	self.buff_extension = ScriptUnit.extension(unit, "buff_system")
+	local career_extension = ScriptUnit.extension(unit, "career_system")
+	self.career_extension = career_extension
+	local talent_extension = ScriptUnit.has_extension(unit, "talent_system")
+	self.talent_extension = talent_extension
+	local equipment = self._equipment
+	local profile = self._profile
+	local unit_1p = self._first_person_unit
+	local unit_3p = self._unit
+	local function is_server()
+		return Managers.player.is_server
+	end
+
+	self:add_equipment_by_category("weapon_slots")
+	self:add_equipment_by_category("enemy_weapon_slots")
+
+	local skill_index = (talent_extension and talent_extension:get_talent_career_skill_index()) or 1
+	local weapon_index = talent_extension and talent_extension:get_talent_career_weapon_index()
+	self.initial_inventory.slot_career_skill_weapon = career_extension:career_skill_weapon_name(skill_index, weapon_index)
+
+	self:add_equipment_by_category("career_skill_weapon_slots")
+	self.buff_extension = ScriptUnit.extension(unit, "buff_system")
+	local has_bombardier = self.buff_extension:has_buff_type("bardin_engineer_upgraded_grenades")
+	local bombardier_inventory = {}
+	if has_bombardier then	
+		bombardier_inventory = {
+			{
+				slot_name = "slot_grenade",
+				item_name = "grenade_frag_02"
+			},
+			{
+				slot_name = "slot_grenade",
+				item_name = "grenade_fire_02"
+			}
+		}
+		if bombardier_inventory then
+			for i = 1, #bombardier_inventory, 1 do
+				local bombardier_item = bombardier_inventory[i]
+				local slot_name = bombardier_item.slot_name
+				local item_data = ItemMasterList[bombardier_item.item_name]
+				local slot_data = self:get_slot_data(slot_name)
+				local can_store_additional_item = self:can_store_additional_item(slot_name)
+
+				local unit_template = nil
+				local extra_extension_init_data = {}
+
+				if can_store_additional_item and slot_data then
+					--mod:echo("can store additional item - storing additional item")
+					self:store_additional_item(slot_name, item_data)
+				else
+					--mod:echo("can't store additional item - doing nothing")
+					self:destroy_slot(slot_name)
+					self:add_equipment(slot_name, item_data, unit_template, extra_extension_init_data)
+				end
+
+				local wielded_slot_name = self:get_wielded_slot_name()
+
+				if wielded_slot_name == slot_name then
+					CharacterStateHelper.stop_weapon_actions(inventory_extension, "picked_up_object")
+					CharacterStateHelper.stop_career_abilities(career_extension, "picked_up_object")
+					inventory_extension:wield(slot_name)
+				end
+			end
+		end
+	end
+		
+	local additional_items = self.initial_inventory.additional_items
+
+	if additional_items then
+		for slot_name, slot_items in pairs(additional_items) do
+			for i = 1, #slot_items.items, 1 do
+				local item_data = slot_items.items[i]
+				local slot_data = self:get_slot_data(slot_name)
+
+				if slot_data then
+					local skip_resync = true
+
+					self:store_additional_item(slot_name, item_data, skip_resync)
+				else
+					self:add_equipment(slot_name, item_data)
+				end
+			end
+		end
+	end
+
+	Unit.set_data(self._first_person_unit, "equipment", self._equipment)
+
+	if profile.default_wielded_slot then
+		local default_wielded_slot = profile.default_wielded_slot
+		local slot_data = self._equipment.slots[default_wielded_slot]
+
+		if not slot_data then
+			table.dump(self._equipment.slots, "self._equipment.slots", 1)
+			Application.error("Tried to wield default slot %s for %s that contained no weapon.", default_wielded_slot, career_extension:career_name())
+		end
+
+		self:_wield_slot(equipment, slot_data, unit_1p, unit_3p)
+
+		local item_data = slot_data.item_data
+		local item_template = BackendUtils.get_item_template(item_data)
+
+		self:_spawn_attached_units(item_template.first_person_attached_units)
+
+		local backend_id = item_data.backend_id
+		local buffs = self:_get_property_and_trait_buffs(backend_id)
+
+		self:apply_buffs(buffs, "wield", item_data.name, default_wielded_slot)
+	end
+
+	self._equipment.wielded_slot = profile.default_wielded_slot
+end
+--[[SimpleInventoryExtension.extensions_ready = function(self, world, unit)
     local first_person_extension = ScriptUnit.extension(unit, "first_person_system")
     self.first_person_extension = first_person_extension
     self._first_person_unit = first_person_extension:get_first_person_unit()
@@ -3368,7 +3505,7 @@ SimpleInventoryExtension.extensions_ready = function(self, world, unit)
     end
 
     self._equipment.wielded_slot = profile.default_wielded_slot
-end
+end]]
 --[FREE SHOT BUG FIX]:
 ActionCareerDREngineer._fake_activate_ability = function (self, t)
 	--local FREE_ABILITY_AMMO_TIME = 4
@@ -4244,7 +4381,7 @@ BuffTemplates.kerillian_ranged_power_on_health_gain_buff = {
 				stat_buff = "power_level_ranged",
 				max_stacks = 3,
 				multiplier = 0.05,
-				duration = 8
+				duration = 20
 			}
 		}
 	}
@@ -4459,8 +4596,8 @@ BuffTemplates.kerillian_thorn_sister_self_heal_buff = {
 		{
 			name = "kerillian_thorn_sister_self_heal_buff",
 			time_between_heals = 1,
-			heal_amount = 0.5,
-			duration = 5,
+			heal_amount = 2.5,
+			duration = 1,
 			max_stacks = 1,
 			refresh_durations = true,
 			update_func = "kerillian_thorn_sister_self_heal"
@@ -5068,6 +5205,60 @@ end
 BuffTemplates.kerillian_shade_stacking_headshot_damage_on_headshot_buff.buffs[1].max_stacks = 5
 BuffTemplates.kerillian_shade_stacking_headshot_damage_on_headshot_buff.buffs[1].multiplier = 0.2
 --ereth khial's herald
+Talents.wood_elf[7].buffs = {
+	"kerillian_shade_killing_shot_lite"
+}
+BuffTemplates.kerillian_shade_killing_shot_lite = {
+	buffs = {
+		{
+			name = "kerillian_shade_killing_shot_lite",
+			max_stacks = 1,
+			event_buff = true,
+			event = "on_damage_dealt",
+			buff_func = "kerillian_shade_killing_shot_lite",
+			damage_multiplier = 2
+		}
+	}
+}
+ProcFunctions.kerillian_shade_killing_shot_lite = function (player, buff, params, world, param_order)
+	if not Managers.player.is_server then
+		return
+	end
+
+	local player_unit = player.player_unit
+	local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+	local hit_unit = params[1]
+	local unit_get_data = Unit.get_data
+	local damage_amount = params[3]
+	local is_critical_strike = params[6]
+	local modifables_params = params[12]
+	local hit_zone_name = params[4]
+	local attack_type = params[7]
+	local is_dummy = unit_get_data(hit_unit, "is_dummy")
+
+	if is_critical_strike and hit_zone_name == "head" and ALIVE[player_unit] and ALIVE[hit_unit] and (attack_type == "light_attack" or attack_type == "heavy_attack") then
+		local enemy_health_extension = ScriptUnit.extension(hit_unit, "health_system")
+		local buff_template = buff.template
+		local breed = Unit.get_data(hit_unit, "breed")
+		local boss = breed and breed.boss
+		local damage_multiplier = buff_template.damage_multiplier
+
+		local modified_damage_check = damage_amount * damage_multiplier
+		local proc_chance = buff_template.proc_chance
+		local boss = breed and breed.boss
+		local primary_armor = breed and breed.primary_armor_category
+		local target_health = enemy_health_extension:current_health()
+
+		if target_health <= modified_damage_check then
+			if not boss and not is_dummy then
+				modifables_params.damage_amount = target_health
+				--mod:echo("insta kill")
+			end
+		else
+			--mod:echo("dmg not high enough to instakill or boss/dummy")
+		end
+	end
+end
 --[[local function do_damage_calculation(attacker_unit, damage_source, original_power_level, damage_output, hit_zone_name, damage_profile, target_index, boost_curve, boost_damage_multiplier, is_critical_strike, backstab_multiplier, breed, is_dummy, dummy_unit_armor, dropoff_scalar, static_base_damage, is_player_friendly_fire, has_power_boost, difficulty_level, target_unit_armor, target_unit_primary_armor, has_crit_head_shot_killing_blow_perk, has_crit_backstab_killing_blow_perk, target_max_health, target_unit)
 	if damage_profile and damage_profile.no_damage then
 		return 0
@@ -5551,7 +5742,7 @@ ProcFunctions.shade_backstab_ammo_gain = function (player, buff, params)
 			buff_extension:add_buff("kerillian_shade_backstabs_replenishes_ammunition_cooldown")
 		end
 	end
-BuffTemplates.kerillian_shade_backstabs_replenishes_ammunition_cooldown.buffs[1].duration = 1
+BuffTemplates.kerillian_shade_backstabs_replenishes_ammunition_cooldown.buffs[1].duration = 0.5
 --gladerunner
 Talents.wood_elf[10].buffs = {
 	"kerillian_shade_crit_apply_headshot_vulnerability"
@@ -5614,7 +5805,7 @@ BuffTemplates.kerillian_shade_activated_ability_quick_cooldown_crit_stacks = {
 			icon = "kerillian_shade_activated_ability_quick_cooldown",
 			stat_buff = "critical_strike_chance_melee",
 			bonus = 1,
-			max_stacks = 6
+			max_stacks = 12
 		}
 	}
 }
@@ -5914,6 +6105,6 @@ for buff_name, _ in pairs(BuffTemplates) do
         NetworkLookup.buff_templates[buff_name] = index
     end
 end
-mod:echo("[Hero Tweaks]: Active")
+mod:echo("[Hero Tweaks v0.31]: Active")
 -- Your mod code goes here.
 -- https://vmf-docs.verminti.de
