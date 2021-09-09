@@ -409,6 +409,9 @@ Weapons.dual_wield_swords_template_1.dual_wield_attack = true
 -------------------------------------------------------
 --					//////[KRUBER]\\\\\\
 -------------------------------------------------------
+--[MERCENARY]:
+--BuffTemplates.markus_mercenary_ability_cooldown_on_damage_taken.buffs[1].bonus = 0.25
+--on yer feet mates
 --[HUNTSMAN]:
 --PASSIVE
 BuffTemplates.markus_huntsman_passive_crit_aura.buffs[1].range = 10
@@ -3307,6 +3310,96 @@ DamageProfileTemplates.engineer_ability_shot_armor_pierce.armor_modifier_far.att
 Weapons.bardin_engineer_career_skill_weapon_special.default_spread_template = "repeating_handgun"
 Weapons.bardin_engineer_career_skill_weapon_special.actions.action_one.armor_pierce_fire.range = 100
 --[Bombardier gives bombs at start]:
+local function add_bombardier_item(is_server, player_unit, pickup_type)
+	local player_manager = Managers.player
+	local player = player_manager:owner(player_unit)
+
+	if player then
+		local local_bot_or_human = not player.remote
+
+		if local_bot_or_human then
+			local network_manager = Managers.state.network
+			local network_transmit = network_manager.network_transmit
+			local inventory_extension = ScriptUnit.extension(player_unit, "inventory_system")
+			local career_extension = ScriptUnit.extension(player_unit, "career_system")
+			local pickup_settings = AllPickups[pickup_type]
+			local slot_name = pickup_settings.slot_name
+			local item_name = pickup_settings.item_name
+			local slot_data = inventory_extension:get_slot_data(slot_name)
+			local can_store_additional_item = inventory_extension:can_store_additional_item(slot_name)
+
+			if slot_data and not can_store_additional_item then
+				local item_data = slot_data.item_data
+				local item_template = BackendUtils.get_item_template(item_data)
+				local pickup_item_to_spawn = nil
+				mod:echo("cant store additional item...")
+
+				if item_template.name == "frag_grenade_t1" then
+					pickup_item_to_spawn = "frag_grenade_t1"
+					mod:echo("trying to replace item - frag grenade t1")
+				elseif item_template.name == "fire_grenade_t1" then
+					pickup_item_to_spawn = "fire_grenade_t1"
+					mod:echo("trying to replace item - fire grenade t1")
+				elseif item_template.name == "frag_grenade_t2" then
+					pickup_item_to_spawn = "frag_grenade_t2"
+					mod:echo("trying to replace item - frag grenade t2")
+				elseif item_template.name == "fire_grenade_t2" then
+					pickup_item_to_spawn = "fire_grenade_t2"
+					mod:echo("trying to replace item - fire grenade t2")
+				elseif item_template.name == "holy_hand_grenade" then
+					pickup_item_to_spawn = "holy_hand_grenade"
+					mod:echo("trying to replace item - holy hand grenade")
+				end
+
+				if pickup_item_to_spawn then
+					mod:echo("trying to spawn item")
+					
+					local pickup_spawn_type = "dropped"
+					local pickup_name_id = NetworkLookup.pickup_names[pickup_item_to_spawn]
+					local pickup_spawn_type_id = NetworkLookup.pickup_spawn_types[pickup_spawn_type]
+					local position = POSITION_LOOKUP[player_unit]
+					local rotation = Unit.local_rotation(player_unit, 0)
+
+					network_transmit:send_rpc_server("rpc_spawn_pickup", pickup_name_id, position, rotation, pickup_spawn_type_id)
+				end
+			end
+
+			local item_data = ItemMasterList[item_name]
+			local unit_template = nil
+			local extra_extension_init_data = {}
+
+			if can_store_additional_item and slot_data then
+				inventory_extension:store_additional_item(slot_name, item_data)
+				mod:echo("can store additional item")
+			else
+				mod:echo("can store additional item - else")
+				inventory_extension:destroy_slot(slot_name)
+				inventory_extension:add_equipment(slot_name, item_data, unit_template, extra_extension_init_data)
+			end
+
+			local go_id = Managers.state.unit_storage:go_id(player_unit)
+			local slot_id = NetworkLookup.equipment_slots[slot_name]
+			local item_id = NetworkLookup.item_names[item_name]
+			local weapon_skin_id = NetworkLookup.weapon_skins["n/a"]
+
+			if is_server then
+				network_transmit:send_rpc_clients("rpc_add_equipment", go_id, slot_id, item_id, weapon_skin_id)
+				mod:echo("is server - rpc_add_equipment")
+			else
+				network_transmit:send_rpc_server("rpc_add_equipment", go_id, slot_id, item_id, weapon_skin_id)
+				mod:echo("else - rpc_add_equipment")
+			end
+
+			local wielded_slot_name = inventory_extension:get_wielded_slot_name()
+
+			if wielded_slot_name == slot_name then
+				CharacterStateHelper.stop_weapon_actions(inventory_extension, "picked_up_object")
+				CharacterStateHelper.stop_career_abilities(career_extension, "picked_up_object")
+				inventory_extension:wield(slot_name)
+			end
+		end
+	end
+end
 SimpleInventoryExtension.extensions_ready = function (self, world, unit)
 	local first_person_extension = ScriptUnit.extension(unit, "first_person_system")
 	self.first_person_extension = first_person_extension
@@ -3688,12 +3781,313 @@ BuffTemplates.sienna_adept_reduced_non_burn_damage.buffs[1].multiplier = -0.15
 --[PYROMANCER:]
 --[PASSIVES]:
 PassiveAbilitySettings.bw_1.buffs = {
-			"sienna_scholar_overcharge_no_slow",
+			"sienna_scholar_overcharge_lite",
 			"sienna_scholar_passive",
+			"sienna_scholar_passive_reduced_overcharge_generation_aura",
+			--"sienna_scholar_passive_no_ammo_consumption_aura",
 			"sienna_scholar_passive_ranged_damage",
 			"sienna_scholar_ability_cooldown_on_hit",
 			"sienna_scholar_ability_cooldown_on_damage_taken"
 		}
+local OVERCHARGE_LEVELS = table.enum("none", "low", "medium", "high", "critical", "exploding")
+PlayerUnitOverchargeExtension._update_overcharge_buff = function (self, state)
+	local buff_extension = self._buff_extension
+
+	if state == OVERCHARGE_LEVELS.high then
+		if buff_extension:has_buff_type("sienna_unchained_passive") or buff_extension:has_buff_perk("overcharge_no_slow") then
+			self:_add_overcharge_buff("overcharged_critical_no_attack_penalty")
+		elseif buff_extension:has_buff_perk("overcharge_lite") then
+			self:_add_overcharge_buff("overcharged_critical_lite")
+		else
+			self:_add_overcharge_buff("overcharged_critical")
+		end
+	elseif state == OVERCHARGE_LEVELS.medium then
+		if buff_extension:has_buff_type("sienna_unchained_passive") or buff_extension:has_buff_perk("overcharge_no_slow") then
+			self:_add_overcharge_buff("overcharged_no_attack_penalty")
+		elseif buff_extension:has_buff_perk("overcharge_lite") then
+			self:_add_overcharge_buff("overcharged_lite")
+		else
+			self:_add_overcharge_buff("overcharged")
+		end
+	else
+		self:_add_overcharge_buff(nil)
+	end
+end
+BuffTemplates.sienna_scholar_overcharge_lite = {
+	buffs = {
+		{
+			name = "sienna_scholar_overcharge_lite",
+			max_stacks = 1,
+			perk = "overcharge_lite"
+		}
+	}
+}
+BuffTemplates.overcharged_lite = {
+	buffs = {
+		{
+			multiplier = -0.05,
+			name = "overcharged_lite",
+			stat_buff = "attack_speed"
+		}
+	}
+}
+BuffTemplates.overcharged_critical_lite = {
+	buffs = {
+		{
+			multiplier = -0.15,
+			name = "overcharged_critical_lite",
+			stat_buff = "attack_speed"
+		}
+	}
+}
+BuffTemplates.sienna_scholar_passive_reduced_overcharge_generation_aura_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_passive_reduced_overcharge_generation_aura_buff",
+			max_stacks = 1,
+			icon = "sienna_scholar_overcharge_regen_on_grimoire_pickup", --"sienna_scholar_overcharge_regen_on_grimoire_pickup", --"sienna_scholar_activated_ability_additional_projectiles",
+			stat_buff = "reduced_overcharge",
+			multiplier = -0.1
+		}
+	}
+}
+BuffTemplates.sienna_scholar_passive_reduced_overcharge_generation_aura = {
+	buffs = {
+		{
+			name = "sienna_scholar_passive_reduced_overcharge_generation_aura",
+			buff_to_add = "sienna_scholar_passive_reduced_overcharge_generation_aura_buff",
+			max_stacks = 1,
+			update_func = "activate_buff_on_distance",
+			remove_buff_func = "remove_aura_buff",
+			range = 10
+		}
+	}
+}
+BuffTemplates.sienna_scholar_passive_no_ammo_consumption_aura = {
+	buffs = {
+		{
+			name = "sienna_scholar_passive_no_ammo_consumption_aura",
+			buff_to_add = "sienna_scholar_passive_no_ammo_consumption_aura_buff",
+			max_stacks = 1,
+			update_func = "activate_buff_on_distance",
+			remove_buff_func = "remove_aura_buff",
+			range = 10
+		}
+	}
+}
+BuffTemplates.sienna_scholar_passive_no_ammo_consumption_aura_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_passive_no_ammo_consumption_aura_buff",
+			max_stacks = 1,
+			event_buff = true,
+			event = "on_start_action",
+			buff_func = "sienna_scholar_no_ammo_consumption"
+		}
+	}
+}
+BuffTemplates.sienna_scholar_passive_no_ammo_consumption = {
+	buffs = {
+		{
+			event = "on_ammo_used",
+			icon = "victor_bountyhunter_passive_infinite_ammo",
+			event_buff = true,
+			buff_func = "dummy_function",
+			remove_on_proc = true,
+			perk = "infinite_ammo",
+			priority_buff = true,
+			max_stacks = 1
+		}
+	}
+}
+ProcFunctions.sienna_scholar_no_ammo_consumption = function (player, buff, params)
+		local player_unit = player.player_unit
+		local action_type = params[1]
+		local valid_action = action_type == "thrown_projectile" or action_type == "shotgun" or action_type == "handgun" or action_type == "crossbow" or action_type == "grenade_thrower" or action_type == "bow" or action_type == "bow_energy" or action_type == "multi_shoot"
+
+		if Unit.alive(player_unit) then
+			local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+			local proc_chance = 1 --0.1
+			
+
+			if valid_action then
+				mod:echo("valid action")
+				local procced = math.random() <= proc_chance
+				if procced then
+					buff_extension:add_buff("sienna_scholar_passive_no_ammo_consumption")
+				end
+			end
+		end
+	end
+--martial study
+Talents.bright_wizard[4].buffs = {
+	"sienna_scholar_attack_speed_critical_kill"
+}
+BuffTemplates.sienna_scholar_attack_speed_critical_kill = {
+	buffs = {
+		{
+			name = "sienna_scholar_attack_speed_critical_kill",
+			max_stacks = 1,
+			event_buff = true,
+			event = "on_kill",
+			buff_func = "add_attack_speed_on_critical_kill",
+			buff_to_add = "sienna_scholar_attack_speed_critical_kill_buff"
+		}
+	}
+}
+BuffTemplates.sienna_scholar_attack_speed_critical_kill_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_attack_speed_critical_kill_buff",
+			max_stacks = 1,
+			stat_buff = "attack_speed",
+			icon = "sienna_scholar_increased_attack_speed",
+			multiplier = 0.1,
+			duration = 5,
+			refresh_durations = true
+		}
+	}
+}
+ProcFunctions.add_attack_speed_on_critical_kill = function (player, buff, params)
+	local player_unit = player.player_unit
+
+	if not Unit.alive(player_unit) then
+		return
+	end
+	local killing_blow_data = params[1]
+
+	if not killing_blow_data then
+		return
+	end
+
+	local is_critical = killing_blow_data[DamageDataIndex.CRITICAL_HIT]
+
+	if is_critical then
+		local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+		local template = buff.template
+		local buff_to_add = template.buff_to_add
+
+		buff_extension:add_buff(buff_to_add)
+	end
+end
+--ride the fire wind
+BuffTemplates.sienna_scholar_ranged_power_ascending_descending_buff.buffs[2] = {
+	max_stacks = 20,
+	name = "sienna_scholar_burn_power_ascending_descending_buff",
+	--icon = "sienna_scholar_ranged_power_ascending_descending",
+	stat_buff = "increased_burn_damage",
+	multiplier = 0.025
+}
+--Spirit Casting
+Talents.bright_wizard[5].buffer = nil
+Talents.bright_wizard[5].buffs = {
+	"sienna_scholar_crit_count"
+}
+BuffTemplates.sienna_scholar_crit_count = {
+	buffs = {
+		{
+			name = "sienna_scholar_crit_count",
+			event = "on_critical_hit",
+			max_stacks = 1,
+			buff_to_add = "sienna_scholar_counter_buff",
+			event_buff = true,
+			buff_func = "add_buff_on_first_target_hit"
+		}
+	}
+}
+BuffTemplates.sienna_scholar_counter_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_counter_buff",
+			reset_on_max_stacks = true,
+			max_stacks = 8,
+			on_max_stacks_func = "add_remove_buffs",
+			icon = "markus_mercenary_crit_count",
+			max_stack_data = {
+				buffs_to_add = {
+					"sienna_scholar_crit_count_buff"
+				}
+			}
+		}
+	}
+}
+BuffTemplates.sienna_scholar_crit_count_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_crit_count_buff",
+			event = "on_critical_action",
+			icon = "sienna_scholar_crit_chance_above_health_threshold",
+			event_buff = true,
+			buff_func = "dummy_function",
+			remove_on_proc = true,
+			perk = "guaranteed_crit",
+			priority_buff = true,
+			max_stacks = 1
+		}
+	}
+}
+--one with the flame
+BuffTemplates.sienna_scholar_passive_increased_attack_speed_from_overcharge.buffs[1].chunk_size = 5
+BuffTemplates.sienna_scholar_passive_increased_attack_speed_from_overcharge.buffs[1].max_stacks = 6
+BuffTemplates.sienna_scholar_passive_increased_attack_speed.buffs[1].max_stacks = 6
+BuffTemplates.sienna_scholar_passive_increased_attack_speed.buffs[1].multiplier = 0.05
+--on the precipice
+Talents.bright_wizard[8].buffer = nil
+Talents.bright_wizard[8].buffs = {
+	"sienna_scholar_reduced_overcharge_generation_from_overcharge"
+}
+BuffTemplates.sienna_scholar_reduced_overcharge_generation_from_overcharge = {
+	buffs = {
+		{
+			name = "sienna_scholar_reduced_overcharge_generation_from_overcharge",
+			max_stacks = 6,
+			update_func = "activate_buff_stacks_based_on_overcharge_chunks",
+			chunk_size = 5,
+			buff_to_add = "sienna_scholar_reduced_overcharge_generation_from_overcharge_buff"
+		}
+	}
+}
+BuffTemplates.sienna_scholar_reduced_overcharge_generation_from_overcharge_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_reduced_overcharge_generation_from_overcharge_buff",
+			stat_buff = "reduced_overcharge",
+			multiplier = -0.075,
+			max_stacks = 6,
+			icon = "sienna_scholar_passive_increased_power_level_on_high_overcharge"
+		}
+	}
+}
+--ults
+ActionCareerBWScholar.init = function (self, world, item_name, is_server, owner_unit, damage_unit, first_person_unit, weapon_unit, weapon_system)
+	ActionCareerBWScholar.super.init(self, world, item_name, is_server, owner_unit, damage_unit, first_person_unit, weapon_unit, weapon_system)
+
+	self.career_extension = ScriptUnit.extension(owner_unit, "career_system")
+	self.inventory_extension = ScriptUnit.extension(owner_unit, "inventory_system")
+	self.talent_extension = ScriptUnit.extension(owner_unit, "talent_system")
+	self.buff_extension = ScriptUnit.extension(owner_unit, "buff_system")
+	local talent_extension = self.talent_extension
+	local owner_unit = self.owner_unit
+	if talent_extension:has_talent("sienna_scholar_activated_ability_heal", "bright_wizard", true) then
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.num_projectiles = 3
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.speed = 2000
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.impact_data.max_bounces = 12 --[[= {
+				max_bounces = 12,
+				damage_profile = "fire_spear_trueflight",
+				bounce_on_level_units = true
+		}]]
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.is_sweet_little_flame = true
+	else
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.num_projectiles = 1
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.speed = 3500
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.impact_data.max_bounces = 8 --[[= {
+				max_bounces = 8,
+				damage_profile = "fire_spear_trueflight",
+				bounce_on_level_units = true
+		}]]
+		Weapons.sienna_scholar_career_skill_weapon.actions.action_career_release.default.is_sweet_little_flame = nil
+	end
+end
 --[UNCHAINED:]
 --[PASSIVES]:
 
@@ -4270,6 +4664,8 @@ BuffTemplates.kerillian_thorn_sister_passive_temp_health_funnel_aura.buffs[1].ra
 --[INHERITANCE FX ADJUSTMENTS]:
 BuffTemplates.kerillian_thorn_sister_avatar_buff_1.deactivation_sound = nil
 BuffTemplates.kerillian_thorn_sister_avatar_buff_1.activation_sound = nil
+--ATHARTI'S DELIGHT
+Talents.wood_elf[60].buffer = "server"
 --SURGE OF MALICE
 BuffFunctionTemplates.functions.update_server_buff_on_health_percent = function (owner_unit, buff, params)
 		if not Managers.state.network.is_server then
@@ -6105,6 +6501,6 @@ for buff_name, _ in pairs(BuffTemplates) do
         NetworkLookup.buff_templates[buff_name] = index
     end
 end
-mod:echo("[Hero Tweaks v0.31]: Active")
+mod:echo("[Hero Tweaks v0.351]: Active")
 -- Your mod code goes here.
 -- https://vmf-docs.verminti.de
