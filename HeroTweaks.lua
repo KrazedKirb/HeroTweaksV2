@@ -4002,7 +4002,7 @@ BuffTemplates.sienna_scholar_counter_buff = {
 			reset_on_max_stacks = true,
 			max_stacks = 8,
 			on_max_stacks_func = "add_remove_buffs",
-			icon = "markus_mercenary_crit_count",
+			icon = "sienna_scholar_crit_chance_above_health_threshold",
 			max_stack_data = {
 				buffs_to_add = {
 					"sienna_scholar_crit_count_buff"
@@ -4016,7 +4016,7 @@ BuffTemplates.sienna_scholar_crit_count_buff = {
 		{
 			name = "sienna_scholar_crit_count_buff",
 			event = "on_critical_action",
-			icon = "sienna_scholar_crit_chance_above_health_threshold",
+			icon = "sienna_scholar_activated_ability", --"markus_mercenary_crit_count", --"sienna_scholar_crit_chance_above_health_threshold",
 			event_buff = true,
 			buff_func = "dummy_function",
 			remove_on_proc = true,
@@ -4058,6 +4058,163 @@ BuffTemplates.sienna_scholar_reduced_overcharge_generation_from_overcharge_buff 
 		}
 	}
 }
+--fleetflame
+Talents.bright_wizard[12].buffs = {
+	"sienna_scholar_vent_movespeed"
+}
+BuffTemplates.sienna_scholar_vent_movespeed = {
+	buffs = {
+		{
+			name = "sienna_scholar_vent_movespeed",
+			max_stacks = 1,
+			event_buff = true,
+			event = "on_damage_taken",
+			perk = "no_vent_slowdown",
+			buff_func = "sienna_scholar_movespeed_on_vent",
+			buffs_to_add = {
+				"sienna_scholar_vent_movespeed_buff"
+			}
+		}
+	}
+}
+BuffTemplates.sienna_scholar_vent_movespeed_buff = {
+	buffs = {
+		{
+			name = "sienna_scholar_vent_movespeed_buff",
+			max_stacks = 1,
+			icon = "sienna_scholar_move_speed_on_critical_hit",
+			stat_buff = "movement_speed",
+			multiplier = 1.2,
+			duration = 3,
+			remove_buff_func = "remove_movement_buff",
+			apply_buff_func = "apply_movement_buff",
+			path_to_movement_setting_to_modify = {
+				"move_speed"
+			}
+		}
+	}
+}
+ProcFunctions.sienna_scholar_movespeed_on_vent = function (player, buff, params)
+		local player_unit = player.player_unit
+		local function is_server()
+			return Managers.player.is_server
+		end
+		if ALIVE[player_unit] then
+			local damage_type = params[3]
+
+			if damage_type and damage_type == "overcharge" then
+				local buff_template = buff.template
+				local buff_list = buff_template.buffs_to_add
+
+				for i = 1, #buff_list, 1 do
+					local buff_name = buff_list[i]
+					local buff_extension = ScriptUnit.extension(player_unit, "buff_system")
+					local network_manager = Managers.state.network
+					local network_transmit = network_manager.network_transmit
+					local unit_object_id = network_manager:unit_game_object_id(player_unit)
+					local buff_template_name_id = NetworkLookup.buff_templates[buff_name]
+
+					if is_server() then
+						buff_extension:add_buff(buff_name, {
+							attacker_unit = player_unit
+						})
+						network_transmit:send_rpc_clients("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, false)
+					else
+						network_transmit:send_rpc_server("rpc_add_buff", unit_object_id, buff_template_name_id, unit_object_id, 0, true)
+					end
+				end
+			end
+		end
+	end
+BuffTemplates.planted_fast_decrease_movement_venting = {
+	buffs = {
+		{
+			remove_buff_name = "planted_return_to_normal_movement",
+			name = "decrease_speed",
+			lerp_time = 0.01,
+			multiplier = 1,
+			update_func = "update_action_lerp_movement_buff_venting",
+			remove_buff_func = "remove_action_lerp_movement_buff",
+			apply_buff_func = "apply_action_lerp_movement_buff",
+			path_to_movement_setting_to_modify = {
+				"move_speed"
+			}
+		},
+		{
+			remove_buff_name = "planted_return_to_normal_crouch_movement",
+			name = "decrease_crouch_speed",
+			lerp_time = 0.01,
+			multiplier = 1,
+			update_func = "update_action_lerp_movement_buff_venting",
+			remove_buff_func = "remove_action_lerp_movement_buff",
+			apply_buff_func = "apply_action_lerp_movement_buff",
+			path_to_movement_setting_to_modify = {
+				"crouch_move_speed"
+			}
+		},
+		{
+			remove_buff_name = "planted_return_to_normal_walk_movement",
+			name = "decrease_walk_speed",
+			lerp_time = 0.01,
+			multiplier = 1,
+			update_func = "update_action_lerp_movement_buff_venting",
+			remove_buff_func = "remove_action_lerp_movement_buff",
+			apply_buff_func = "apply_action_lerp_movement_buff",
+			path_to_movement_setting_to_modify = {
+				"walk_move_speed"
+			}
+		}
+	}
+}
+BuffFunctionTemplates.functions.update_action_lerp_movement_buff_venting = function (unit, buff, params)
+	local bonus = params.bonus
+	local multiplier = params.multiplier
+	local time_into_buff = params.time_into_buff
+	local old_value_to_update_movement_setting, value_to_update_movement_setting, old_multiplier_to_update_movement_setting, multiplier_to_update_movement_setting = nil
+	local percentage_in_lerp = math.min(1, time_into_buff / buff.template.lerp_time)
+	local buff_extension = ScriptUnit.extension(unit, "buff_system")
+	if buff_extension:has_buff_type("sienna_scholar_vent_movespeed") then
+		multiplier = 1
+		mod:echo("has vent buff")
+	else
+		mod:echo("not has vent buff")
+	end
+
+	if bonus then
+		local new_value = math.lerp(0, bonus, percentage_in_lerp)
+		old_value_to_update_movement_setting = buff.current_lerped_value
+		buff.current_lerped_value = new_value
+		value_to_update_movement_setting = new_value
+	end
+
+	if multiplier then
+		local new_multiplier = math.lerp(1, multiplier, percentage_in_lerp)
+		old_multiplier_to_update_movement_setting = buff.current_lerped_multiplier
+		buff.current_lerped_multiplier = new_multiplier
+		multiplier_to_update_movement_setting = new_multiplier
+	end
+
+	if value_to_update_movement_setting or multiplier_to_update_movement_setting then
+		if buff.has_added_movement_previous_turn then
+			buff_extension_function_params.value = old_value_to_update_movement_setting
+			buff_extension_function_params.multiplier = old_multiplier_to_update_movement_setting
+
+			BuffFunctionTemplates.functions.remove_movement_buff(unit, buff, buff_extension_function_params)
+		end
+
+		buff.has_added_movement_previous_turn = true
+		buff_extension_function_params.value = value_to_update_movement_setting
+		buff_extension_function_params.multiplier = multiplier_to_update_movement_setting
+
+		BuffFunctionTemplates.functions.apply_movement_buff(unit, buff, buff_extension_function_params)
+	end
+end
+Weapons.staff_blast_beam_template_1.actions.weapon_reload.default.buff_data[1].buff_name = "planted_fast_decrease_movement_venting" 
+Weapons.staff_fireball_fireball_template_1.actions.weapon_reload.default.buff_data[1].buff_name = "planted_fast_decrease_movement_venting" 
+Weapons.staff_fireball_geiser_template_1.actions.weapon_reload.default.buff_data[1].buff_name = "planted_fast_decrease_movement_venting" 
+Weapons.staff_flamethrower_template.actions.weapon_reload.default.buff_data[1].buff_name = "planted_fast_decrease_movement_venting" 
+Weapons.staff_spark_spear_template_1.actions.weapon_reload.default.buff_data[1].buff_name = "planted_fast_decrease_movement_venting" 
+Weapons.bw_deus_01_template_1.actions.weapon_reload.default.buff_data[1].buff_name = "planted_fast_decrease_movement_venting" 
 --ults
 ActionCareerBWScholar.init = function (self, world, item_name, is_server, owner_unit, damage_unit, first_person_unit, weapon_unit, weapon_system)
 	ActionCareerBWScholar.super.init(self, world, item_name, is_server, owner_unit, damage_unit, first_person_unit, weapon_unit, weapon_system)
